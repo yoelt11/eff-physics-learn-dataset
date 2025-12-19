@@ -1,0 +1,17 @@
+# All datasets are zip files that will be extracted to:
+# /home/etorres/projects/git/ePIL-RBF/datasets/
+# Format: dataset_name = "GOOGLE_DRIVE_FILE_ID"
+
+# helmholtz2D_old = "13LduVyqgU0P_t4ZZBynA-AqHb81fJhYF"
+helmholtz2D = "1SLg7GUxzUIl6tWQ-xxe-HFBnN4NqaigU"
+helmholtz3D = "1Y4iqmHWf-JnnVUoCt767VVTrIsio4tqP"
+burgers = "1ghwmA_Pir1epE45UXjZ5FYrYX0ZpdGG9"
+allen_cahn = "1R8ciIuib4QO_d5HtY12DPwrsBeoflj1Y"
+flow_mixing = "1ly3v8qysghp_6pJyGe1bCCpCTd4snank"
+convection = "14ontlZyzys_pPKQpeoIW81zKl2Scxi9R"
+# HLRP datasets
+hlrp_cdr = "132eWiCbSZKienhssNDRVk4DH9PmX8zVP"
+hlrp_convection = "1dW1mQ5Qh-CaJOWFAYF-aTUCq2HO_j5cy"
+hlrp_diffusion = "18_1N48-e8J4Ynr1SN7B5B9SFUMPSl5bd"
+hlrp_helmholtz = "1JFbt7yiyM0nbRXuw7Vkrh7b105uYB-w_"
+hrlp_reaction = "1DtlEoPjElE-zPNTX0aQ5CNi-Z3Rd__HL"

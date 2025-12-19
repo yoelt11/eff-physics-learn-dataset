@@ -1,0 +1,34 @@
+{
+  "train_key": "train_few",
+  "n_components": 5,
+  "explained_variance_ratio": [
+    0.32169318199157715,
+    0.2244175523519516,
+    0.18267492949962616,
+    0.14874546229839325,
+    0.05325348302721977
+  ],
+  "splits": {
+    "train_few": {
+      "n": 10,
+      "nn_to_train_mean": 0.0,
+      "nn_to_train_median": 0.0,
+      "dist_to_train_centroid_mean": 3.010571241378784,
+      "dist_to_train_centroid_median": 1.8749313354492188
+    },
+    "interp": {
+      "n": 1,
+      "nn_to_train_mean": 1.0352801084518433,
+      "nn_to_train_median": 1.0352801084518433,
+      "dist_to_train_centroid_mean": 2.3571648597717285,
+      "dist_to_train_centroid_median": 2.3571648597717285
+    },
+    "extrap": {
+      "n": 1,
+      "nn_to_train_mean": 7.641684532165527,
+      "nn_to_train_median": 7.641684532165527,
+      "dist_to_train_centroid_mean": 8.24195384979248,
+      "dist_to_train_centroid_median": 8.24195384979248
+    }
+  }
+}

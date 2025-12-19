@@ -33,6 +33,9 @@ dependencies = [
     
     # Progress bars
     "tqdm>=4.66.0",
+
+    # Plotting (smoke-test visualizations)
+    "matplotlib>=3.8.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +52,14 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eff_physics_learn_dataset"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"configs/datasets/dataset_links.toml" = "eff_physics_learn_dataset/configs/datasets/dataset_links.toml"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "configs/datasets/dataset_links.toml",
+]
 
 [tool.uv]
 dev-dependencies = [

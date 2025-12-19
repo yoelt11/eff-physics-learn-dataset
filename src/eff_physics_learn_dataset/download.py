@@ -1,9 +1,13 @@
 """Dataset download utilities."""
 
+from __future__ import annotations
+
+import os
 import shutil
 import tempfile
+from importlib import resources
 from pathlib import Path
-from typing import Dict
+from typing import Dict, IO
 
 try:
     import tomli
@@ -13,19 +17,50 @@ except ImportError:
 import gdown
 
 
-def load_dataset_links(config_path: Path | str) -> Dict[str, str]:
-    """Load dataset links from TOML configuration file.
-    
-    Args:
-        config_path: Path to the TOML configuration file
-        
-    Returns:
-        Dictionary mapping dataset names to Google Drive file IDs
+def _open_default_dataset_links() -> IO[bytes]:
+    """Open the packaged default dataset links TOML.
+
+    This file is shipped with the installed wheel (see `pyproject.toml` hatch config).
     """
-    config_path = Path(config_path)
-    with open(config_path, "rb") as f:
-        config = tomli.load(f)
-    
+
+    # Preferred: inside the wheel we install it under the package at:
+    # eff_physics_learn_dataset/configs/datasets/dataset_links.toml
+    try:
+        return resources.files("eff_physics_learn_dataset").joinpath(
+            "configs/datasets/dataset_links.toml"
+        ).open("rb")
+    except FileNotFoundError:
+        # Dev fallback (running from repo without built wheel):
+        # repo_root/configs/datasets/dataset_links.toml
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        return (repo_root / "configs" / "datasets" / "dataset_links.toml").open("rb")
+
+
+def load_dataset_links(config_path: Path | str | None = None) -> Dict[str, str]:
+    """Load dataset links from a TOML configuration file.
+
+    Resolution order:
+    - Explicit `config_path`
+    - `EFF_PHYSICS_LEARN_DATASET_LINKS` env var
+    - Packaged default config shipped with the library
+
+    Returns:
+        Dictionary mapping dataset names to Google Drive file IDs.
+    """
+
+    env_path = os.environ.get("EFF_PHYSICS_LEARN_DATASET_LINKS")
+    if config_path is None and env_path:
+        config_path = env_path
+
+    if config_path is None:
+        f = _open_default_dataset_links()
+        with f:
+            config = tomli.load(f)
+    else:
+        config_path = Path(config_path)
+        with open(config_path, "rb") as f:
+            config = tomli.load(f)
+
     # Filter out comments (keys starting with #)
     return {k: v for k, v in config.items() if not k.startswith("#")}
 

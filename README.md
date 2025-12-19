@@ -166,6 +166,15 @@ eff-physics-learn-dataset/
 └── README.md
 ```
 
+## Cite (if useful)
+
+```bibtex
+@article{torresamortized,
+  title={Amortized Physics-Informed Learning via Generative Initialization of Radial Basis Functions},
+  author={Torres, Edgar and Niepert, Mathias}
+}
+```
+
 ## License
 
 MIT License - See [LICENSE](LICENSE) for details.

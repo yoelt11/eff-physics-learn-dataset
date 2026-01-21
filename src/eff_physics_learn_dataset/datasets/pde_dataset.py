@@ -228,8 +228,47 @@ class PDEDataset:
                 target = min(target, int(n_each))
 
             if balance_strategy == "random":
-                interp_idx = subsample(interp_idx, target)
-                extrap_idx = subsample(extrap_idx, target)
+                # Random sampling, but ensure interp samples are closer than extrap samples in solution space
+                # This prevents counterintuitive results where extrap appears closer than interp
+                interp_idx_sampled = subsample(interp_idx, target)
+                extrap_idx_sampled = subsample(extrap_idx, target)
+                
+                # Verify solution-space ordering: compute distances and ensure interp < extrap
+                # Fit PCA on union of all candidates (not just sampled) for consistent embedding
+                union_idx = np.unique(np.concatenate([train_few_idx, interp_idx, extrap_idx]).astype(np.int64))
+                X = vectorize_solutions(
+                    self.u[union_idx],
+                    slice_axis=solution_slice_axis,
+                    slice_index=solution_slice_index,
+                )
+                _, Z = fit_solution_pca(X, n_components=int(solution_n_components))
+                row = {int(i): j for j, i in enumerate(union_idx.tolist())}
+                
+                Z_train = Z[np.asarray([row[int(i)] for i in train_few_idx], dtype=np.int64)]
+                Z_interp_sampled = Z[np.asarray([row[int(i)] for i in interp_idx_sampled], dtype=np.int64)]
+                Z_extrap_sampled = Z[np.asarray([row[int(i)] for i in extrap_idx_sampled], dtype=np.int64)]
+                
+                d_interp_sampled = pairwise_min_distances(Z_interp_sampled, Z_train)
+                d_extrap_sampled = pairwise_min_distances(Z_extrap_sampled, Z_train)
+                
+                # If interp samples are not closer than extrap samples, enforce ordering
+                # by selecting closer interp and farther extrap samples
+                if d_interp_sampled.mean() > d_extrap_sampled.mean():
+                    # Re-rank: pick closest interp and farthest extrap from all candidates
+                    Z_interp_all = Z[np.asarray([row[int(i)] for i in interp_idx], dtype=np.int64)]
+                    Z_extrap_all = Z[np.asarray([row[int(i)] for i in extrap_idx], dtype=np.int64)]
+                    
+                    d_interp_all = pairwise_min_distances(Z_interp_all, Z_train)
+                    d_extrap_all = pairwise_min_distances(Z_extrap_all, Z_train)
+                    
+                    interp_order = np.argsort(d_interp_all)[:target]
+                    extrap_order = np.argsort(d_extrap_all)[::-1][:target]
+                    
+                    interp_idx = interp_idx[interp_order]
+                    extrap_idx = extrap_idx[extrap_order]
+                else:
+                    interp_idx = interp_idx_sampled
+                    extrap_idx = extrap_idx_sampled
             elif balance_strategy == "solution_nn":
                 # Enforce: interp = closest-to-train, extrap = farthest-from-train in solution-PCA space
                 # Fit PCA on union of (train_few + interp candidates + extrap candidates) for stability.

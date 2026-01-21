@@ -208,3 +208,10 @@ __marimo__/
 
 # Downloaded datasets
 /datasets/
+
+# Dataset generation
+generation*.log
+datasets/*/ground_truth_regenerated/
+scripts/generate_datasets/datasets/
+scripts/dataset_generation/solvers/__pycache__/
+

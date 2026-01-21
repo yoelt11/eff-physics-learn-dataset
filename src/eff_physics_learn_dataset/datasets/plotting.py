@@ -72,7 +72,7 @@ def _apply_pitayasmoothie_like_rcparams() -> None:
 
 
 def _apply_rbf_rcparams() -> None:
-    """Apply the PINNs project RBF rcParams."""
+    """Apply the ePIL-RBF project standard rcParams."""
 
     import matplotlib as mpl
 
@@ -89,6 +89,12 @@ def _apply_rbf_rcparams() -> None:
             "figure.titlesize": 24,
             "figure.titleweight": "bold",
             "axes.grid": True,
+            "grid.alpha": 0.3,  # Light and subtle grid
+            "axes.facecolor": "white",  # White background instead of gray
+            "axes.edgecolor": "black",  # Black frame border
+            "axes.linewidth": 1.5,  # Thicker border
+            "figure.facecolor": "white",  # White figure background
+            "savefig.facecolor": "white",  # White saved figure background
             "savefig.dpi": 300,
             "savefig.bbox": "tight",
             "svg.fonttype": "none",  # keep text as text for editability
@@ -241,7 +247,10 @@ def plot_solution_grid(
     if save_path is not None:
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=200)
+        # Save both PNG and SVG for publication quality
+        fig.savefig(save_path, dpi=300, format='png')
+        svg_path = save_path.with_suffix('.svg')
+        fig.savefig(svg_path, format='svg', dpi=300)
 
     return fig
 
@@ -281,10 +290,24 @@ def plot_param_points(
     if projection not in ("raw", "pca", "3d"):
         raise ValueError("projection must be 'auto', 'raw', 'pca', or '3d'")
 
-    # Colors
+    # Colors - ColorBrewer 8 colorblind-friendly palette (publication-ready)
     labels = list(splits.keys())
-    cmap = plt.get_cmap("tab10")
-    colors = {lab: cmap(i % 10) for i, lab in enumerate(labels)}
+    colorbrewer8 = {
+        'train_few': '#1b9e77',      # teal
+        'train': '#1b9e77',           # teal (alias)
+        'interp': '#7570b3',          # purple
+        'extrap': '#d95f02',          # orange
+        'test': '#e7298a',            # pink
+        'val': '#66a61e',             # green
+    }
+    # Fallback colors for unexpected split names
+    fallback_colors = ['#a6761d', '#e6ab02', '#666666']
+    colors = {}
+    for i, lab in enumerate(labels):
+        if lab in colorbrewer8:
+            colors[lab] = colorbrewer8[lab]
+        else:
+            colors[lab] = fallback_colors[i % len(fallback_colors)]
 
     fig = plt.figure(figsize=(7.5, 6.2), constrained_layout=True)
 
@@ -304,18 +327,20 @@ def plot_param_points(
 
             ax = fig.add_subplot(1, 1, 1, projection="3d")
             for lab, a in splits.items():
-                ax.scatter(a[:, 0], a[:, 1], a[:, 2], s=14, alpha=0.7, label=lab, color=colors[lab])
-            ax.set_xlabel(param_names[0])
-            ax.set_ylabel(param_names[1])
-            ax.set_zlabel(param_names[2])
-            ax.legend()
+                ax.scatter(a[:, 0], a[:, 1], a[:, 2], s=50, alpha=0.8,
+                          label=lab, color=colors[lab], edgecolors='black', linewidth=0.5)
+            ax.set_xlabel(param_names[0], fontweight='bold')
+            ax.set_ylabel(param_names[1], fontweight='bold')
+            ax.set_zlabel(param_names[2], fontweight='bold')
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
         else:
             ax = fig.add_subplot(1, 1, 1)
             if P == 2 or projection == "raw":
                 for lab, a in splits.items():
-                    ax.scatter(a[:, 0], a[:, 1], s=14, alpha=0.7, label=lab, color=colors[lab])
-                ax.set_xlabel(param_names[0])
-                ax.set_ylabel(param_names[1])
+                    ax.scatter(a[:, 0], a[:, 1], s=50, alpha=0.8,
+                              label=lab, color=colors[lab], edgecolors='black', linewidth=0.5)
+                ax.set_xlabel(param_names[0], fontweight='bold')
+                ax.set_ylabel(param_names[1], fontweight='bold')
             else:
                 # PCA to 2D using SVD (no sklearn dependency)
                 X = np.concatenate(arrays, axis=0)
@@ -327,17 +352,21 @@ def plot_param_points(
 
                 for lab, a in splits.items():
                     z = (a - mu) @ W
-                    ax.scatter(z[:, 0], z[:, 1], s=14, alpha=0.7, label=lab, color=colors[lab])
-                ax.set_xlabel("PC1")
-                ax.set_ylabel("PC2")
-                ax.set_title("PCA projection (params)")
+                    ax.scatter(z[:, 0], z[:, 1], s=50, alpha=0.8,
+                              label=lab, color=colors[lab], edgecolors='black', linewidth=0.5)
+                ax.set_xlabel("PC1", fontweight='bold')
+                ax.set_ylabel("PC2", fontweight='bold')
+                ax.set_title("PCA projection (params)", fontweight='bold')
 
-            ax.legend()
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
 
     if save_path is not None:
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=200)
+        # Save both PNG and SVG for publication quality
+        fig.savefig(save_path, dpi=300, format='png')
+        svg_path = save_path.with_suffix('.svg')
+        fig.savefig(svg_path, format='svg', dpi=300)
 
     return fig
 
@@ -362,48 +391,69 @@ def plot_solution_similarity_hist(
     fig = plt.figure(figsize=(7.5, 5.2), constrained_layout=True)
     ax = fig.add_subplot(1, 1, 1)
     if title:
-        fig.suptitle(title)
+        fig.suptitle(title, fontweight='bold')
 
+    # Use same ColorBrewer colors as scatter plots
     labels = list(splits.keys())
-    cmap = plt.get_cmap("tab10")
+    colorbrewer8 = {
+        'train_few': '#1b9e77',
+        'train': '#1b9e77',
+        'interp': '#7570b3',
+        'extrap': '#d95f02',
+        'test': '#e7298a',
+        'val': '#66a61e',
+    }
+    fallback_colors = ['#a6761d', '#e6ab02', '#666666']
+
     for i, lab in enumerate(labels):
         d = np.asarray(splits[lab].get(metric, []), dtype=np.float32)
         d = d[np.isfinite(d)]
         if d.size == 0:
             continue
+
+        color = colorbrewer8.get(lab, fallback_colors[i % len(fallback_colors)])
         ax.hist(
             d,
             bins=30,
-            alpha=0.45,
+            alpha=0.6,
             density=bool(density),
             label=lab,
-            color=cmap(i % 10),
+            color=color,
+            edgecolor='black',
+            linewidth=0.5,
         )
         if show_medians:
             med = float(np.median(d))
-            ax.axvline(med, color=cmap(i % 10), linestyle="--", linewidth=1.5, alpha=0.9)
+            ax.axvline(med, color=color, linestyle="--", linewidth=2.0, alpha=0.9)
             ax.text(
                 med,
                 0.95,
-                f"{lab} med={med:.2f}",
+                f"{lab}\nmed={med:.2f}",
                 transform=ax.get_xaxis_transform(),
-                rotation=90,
+                rotation=0,
                 va="top",
-                ha="right",
-                fontsize=9,
-                color=cmap(i % 10),
+                ha="center",
+                fontsize=14,
+                fontweight='bold',
+                color=color,
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, edgecolor=color, linewidth=2)
             )
 
-    ax.set_xlabel(metric)
-    ax.set_ylabel("density" if density else "count")
+    ax.set_xlabel(metric, fontweight='bold')
+    ax.set_ylabel("Density" if density else "Count", fontweight='bold')
     if log_y:
         ax.set_yscale("log")
-    ax.legend()
+    # Legend below plot, horizontal orientation, no shadow
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=len(labels),
+              frameon=True, fancybox=False, shadow=False, fontsize=14)
 
     if save_path is not None:
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=200)
+        # Save both PNG and SVG for publication quality
+        fig.savefig(save_path, dpi=300, format='png')
+        svg_path = save_path.with_suffix('.svg')
+        fig.savefig(svg_path, format='svg', dpi=300)
 
     return fig
 
@@ -509,6 +559,9 @@ def plot_solution_rows(
     if save_path is not None:
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=200)
+        # Save both PNG and SVG for publication quality
+        fig.savefig(save_path, dpi=300, format='png')
+        svg_path = save_path.with_suffix('.svg')
+        fig.savefig(svg_path, format='svg', dpi=300)
 
     return fig

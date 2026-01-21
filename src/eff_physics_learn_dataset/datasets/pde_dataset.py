@@ -442,6 +442,10 @@ class PDEDataset:
         seed: int = 0,
         slice_index: int | None = None,
         slice_axis: int = 1,
+        plot_style: Literal["imshow", "contourf"] = "imshow",
+        contour_levels: int = 12,
+        contour_line_color: str = "black",
+        show_axes: bool = False,
         save_path: Path | str | None = None,
         title: str | None = None,
     ):
@@ -459,6 +463,12 @@ class PDEDataset:
             ]
             gidx_by[name] = idx.tolist()
 
+        extent = None
+        if "X_grid" in self.grids and "T_grid" in self.grids:
+            X = np.asarray(self.grids["X_grid"])
+            T = np.asarray(self.grids["T_grid"])
+            extent = (float(X.min()), float(X.max()), float(T.min()), float(T.max()))
+
         return plot_solution_rows(
             solutions_by_split=solutions_by,
             params_by_split=params_by,
@@ -467,6 +477,11 @@ class PDEDataset:
             seed=seed,
             slice_index=slice_index,
             slice_axis=slice_axis,
+            plot_style=plot_style,
+            contour_levels=contour_levels,
+            contour_line_color=contour_line_color,
+            extent=extent,
+            show_axes=show_axes,
             save_path=save_path,
             title=title,
         )

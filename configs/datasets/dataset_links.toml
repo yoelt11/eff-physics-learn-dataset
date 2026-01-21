@@ -15,11 +15,11 @@
 # -----------------
 # These are the main datasets used for physics learning research
 
-helmholtz2D = "1cLFrNjWKZFIbmeNqYeRRCNPQgSzHDKOS"
+helmholtz2D = "1OPPd6Ac710YC0QowZjTRq9aumtNNZIAU"
 helmholtz3D = "1Y4iqmHWf-JnnVUoCt767VVTrIsio4tqP"
 burgers = "1L53Zpu3S3sxx91fI7cvxvOEACJe2mirb"
 allen_cahn = "1JQHMOxlRKyotpJaA_3OLPBiNbcjDEGTf"
-convection = "1CkNwsPYN0KT_WSk2xFVGPjJT-r3Beqcv"
+convection = "1VEybmWr6zUDjNLlFfQEuRY-pcbfp3DBa"
 flow_mixing = "1ly3v8qysghp_6pJyGe1bCCpCTd4snank"
 
 # HLRP (High-Level Research Project) Datasets

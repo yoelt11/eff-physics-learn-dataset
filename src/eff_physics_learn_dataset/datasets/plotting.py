@@ -467,6 +467,11 @@ def plot_solution_rows(
     seed: int = 0,
     slice_index: int | None = None,
     slice_axis: int = 1,
+    plot_style: str = "imshow",
+    contour_levels: int = 12,
+    contour_line_color: str = "black",
+    extent: tuple[float, float, float, float] | None = None,
+    show_axes: bool = False,
     save_path: Path | str | None = None,
     title: str | None = None,
 ) -> Any:
@@ -499,6 +504,9 @@ def plot_solution_rows(
 
     if title:
         fig.suptitle(title)
+
+    if plot_style not in {"imshow", "contourf"}:
+        raise ValueError("plot_style must be 'imshow' or 'contourf'")
 
     for r, split in enumerate(split_names):
         sol = np.asarray(solutions_by_split[split])
@@ -533,10 +541,38 @@ def plot_solution_rows(
 
         for c in range(cols):
             axc = axes[r, c]
-            axc.axis("off")
-            im = axc.imshow(sol[int(idx[c])], origin="lower", aspect="auto")
-            if c == 0:
-                axc.set_ylabel(split, rotation=90, fontsize=11)
+            field = sol[int(idx[c])]
+            if plot_style == "contourf":
+                cf = axc.contourf(
+                    field,
+                    levels=int(contour_levels),
+                    origin="lower",
+                    extent=extent,
+                )
+                axc.contour(
+                    field,
+                    levels=int(contour_levels),
+                    colors=contour_line_color,
+                    linewidths=0.4,
+                    alpha=0.6,
+                    origin="lower",
+                    extent=extent,
+                )
+                mappable = cf
+            else:
+                im = axc.imshow(field, origin="lower", aspect="auto", extent=extent)
+                mappable = im
+            if show_axes:
+                if r == rows - 1:
+                    axc.set_xlabel("x")
+                else:
+                    axc.set_xticks([])
+                if c == 0:
+                    axc.set_ylabel(f"{split}\n t", rotation=90, fontsize=11)
+                else:
+                    axc.set_yticks([])
+            else:
+                axc.axis("off")
 
             title_parts = []
             if params_by_split is not None and split in params_by_split:
@@ -554,7 +590,7 @@ def plot_solution_rows(
             if title_parts:
                 axc.set_title(" | ".join(title_parts), fontsize=8)
 
-            fig.colorbar(im, ax=axc, fraction=0.046, pad=0.01)
+            fig.colorbar(mappable, ax=axc, fraction=0.046, pad=0.01)
 
     if save_path is not None:
         save_path = Path(save_path)

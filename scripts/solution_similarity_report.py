@@ -77,6 +77,28 @@ def main() -> None:
         help="Number of samples per row for the row-compare image (default: 5).",
     )
     ap.add_argument(
+        "--row-plot-style",
+        default="imshow",
+        choices=["imshow", "contourf"],
+        help="Row plot style for solutions (default: imshow).",
+    )
+    ap.add_argument(
+        "--row-contour-levels",
+        type=int,
+        default=12,
+        help="Contour levels when using --row-plot-style contourf.",
+    )
+    ap.add_argument(
+        "--row-contour-color",
+        default="black",
+        help="Contour line color when using --row-plot-style contourf.",
+    )
+    ap.add_argument(
+        "--row-show-axes",
+        action="store_true",
+        help="Show x/t axes on row plots (default: off).",
+    )
+    ap.add_argument(
         "--out-params",
         default=None,
         help="Write parameter scatter plot PNG (overrides --out-dir).",
@@ -179,6 +201,10 @@ def main() -> None:
         seed=int(args.seed),
         slice_axis=int(args.slice_axis),
         slice_index=args.slice_index,
+        plot_style=args.row_plot_style,
+        contour_levels=int(args.row_contour_levels),
+        contour_line_color=args.row_contour_color,
+        show_axes=bool(args.row_show_axes),
         save_path=Path(out_rows),
         title=f"{args.equation}: {', '.join(rows_splits.keys())} ({int(args.rows_n)} samples each)",
     )

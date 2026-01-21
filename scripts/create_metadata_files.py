@@ -65,16 +65,16 @@ EQUATION_METADATA = {
     "convection": {
         "title": "Linear Convection Equation",
         "pde": "u_t + β u_x = 0",
-        "domain_x": "(0, L) where L=1",
+        "domain_x": "(0, L) where L=2*pi",
         "domain_t": "(0, 1.0)",
         "bc": "Periodic: u(0,t) = u(L,t)",
-        "ic": "u(x,0) = 1 + sin(2πx/L)"
+        "ic": "u(x,0) = 1 + sin(2*pi*x/L)"
     },
     "helmholtz2D": {
         "title": "Helmholtz 2D Equation",
         "pde": "Δu + k²u = q(x,y)",
-        "domain_x": "(0, 1)",
-        "domain_y": "(0, 1)",
+        "domain_x": "(-1, 1)",
+        "domain_y": "(-1, 1)",
         "bc": "Dirichlet: u=0 on boundary",
         "solution": "u(x,y) = sin(a₁πx)sin(a₂πy)"
     }

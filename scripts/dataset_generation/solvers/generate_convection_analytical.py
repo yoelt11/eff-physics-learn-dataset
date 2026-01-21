@@ -127,7 +127,7 @@ def verify_analytical_convection(
 
 def generate_convection_sample_analytical(
     beta: float,
-    x_domain: tuple[float, float] = (-1.0, 1.0),
+    x_domain: tuple[float, float] = (0.0, 2.0 * np.pi),
     t_domain: tuple[float, float] = (0.0, 1.0),
     target_nx: int = 64,
     target_nt: int = 64,

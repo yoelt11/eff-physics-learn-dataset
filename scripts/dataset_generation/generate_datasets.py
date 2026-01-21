@@ -47,7 +47,7 @@ PARAM_RANGES = {
 DOMAIN_CONFIGS = {
     "allen_cahn": {"x_domain": (-1.0, 1.0), "t_domain": (0.0, 1.0)},
     "burgers": {"x_domain": (-1.0, 1.0), "t_domain": (0.0, 1.0)},
-    "convection": {"x_domain": (0.0, 1.0), "t_domain": (0.0, 1.0)},
+    "convection": {"x_domain": (0.0, 2.0 * np.pi), "t_domain": (0.0, 1.0)},
     "helmholtz2D": {"x_domain": (-1.0, 1.0), "y_domain": (-1.0, 1.0)},
 }
 

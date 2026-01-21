@@ -131,15 +131,36 @@ def verify_dataset_samples(
         x_coords = data.get("x", None)
         t_coords = data.get("t", None)
         if x_coords is None or t_coords is None:
-            # Extract from grids
+            # Extract from grids (try multiple possible keys)
             X_grid = data.get("X_grid")
+            if X_grid is None:
+                X_grid = data.get("X_grid_storage")
+            if X_grid is None:
+                X_grid = data.get("X_grid_solver")
+            
             T_grid = data.get("T_grid")
+            if T_grid is None:
+                T_grid = data.get("T_grid_storage")
+            if T_grid is None:
+                T_grid = data.get("T_grid_solver")
             if X_grid is not None:
-                x_coords = X_grid[0, :] if X_grid.ndim == 2 else np.linspace(-1, 1, solutions.shape[2])
-            if T_grid is not None:
-                t_coords = T_grid[:, 0] if T_grid.ndim == 2 else np.linspace(0, 1, solutions.shape[1])
+                X_grid = np.asarray(X_grid)
+                if X_grid.ndim == 2:
+                    # For meshgrid: X_grid[i, j] = x_coords[j], so extract first row
+                    x_coords = X_grid[0, :]
+                else:
+                    x_coords = np.linspace(-1, 1, solutions.shape[2])
             else:
-                raise ValueError(f"Could not find coordinate arrays for {equation}")
+                x_coords = np.linspace(-1, 1, solutions.shape[2])
+            if T_grid is not None:
+                T_grid = np.asarray(T_grid)
+                if T_grid.ndim == 2:
+                    # For meshgrid: T_grid[i, j] = t_coords[i], so extract first column
+                    t_coords = T_grid[:, 0]
+                else:
+                    t_coords = np.linspace(0, 1, solutions.shape[1])
+            else:
+                t_coords = np.linspace(0, 1, solutions.shape[1])
     
     # Determine which samples to verify
     total_samples = solutions.shape[0]

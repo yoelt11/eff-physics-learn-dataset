@@ -1,15 +1,31 @@
-# All datasets are zip files that will be extracted to:
-# /home/etorres/projects/git/ePIL-RBF/datasets/
+# Dataset Download Configuration
+# ==============================
+# 
+# This file contains Google Drive file IDs for all available datasets.
+# Datasets are downloaded as zip files and extracted to: datasets/{name}/ground_truth/
+#
+# To add a new dataset:
+#   1. Upload the dataset zip file to Google Drive
+#   2. Get the file ID from the sharing URL: https://drive.google.com/file/d/FILE_ID/view
+#   3. Add an entry below: dataset_name = "FILE_ID"
+#
 # Format: dataset_name = "GOOGLE_DRIVE_FILE_ID"
 
-# helmholtz2D_old = "13LduVyqgU0P_t4ZZBynA-AqHb81fJhYF"
-helmholtz2D = "1SLg7GUxzUIl6tWQ-xxe-HFBnN4NqaigU"
+# Core PDE Datasets
+# -----------------
+# These are the main datasets used for physics learning research
+
+helmholtz2D = "1cLFrNjWKZFIbmeNqYeRRCNPQgSzHDKOS"
 helmholtz3D = "1Y4iqmHWf-JnnVUoCt767VVTrIsio4tqP"
-burgers = "1ghwmA_Pir1epE45UXjZ5FYrYX0ZpdGG9"
-allen_cahn = "1R8ciIuib4QO_d5HtY12DPwrsBeoflj1Y"
+burgers = "1L53Zpu3S3sxx91fI7cvxvOEACJe2mirb"
+allen_cahn = "1JQHMOxlRKyotpJaA_3OLPBiNbcjDEGTf"
+convection = "1CkNwsPYN0KT_WSk2xFVGPjJT-r3Beqcv"
 flow_mixing = "1ly3v8qysghp_6pJyGe1bCCpCTd4snank"
-convection = "14ontlZyzys_pPKQpeoIW81zKl2Scxi9R"
-# HLRP datasets
+
+# HLRP (High-Level Research Project) Datasets
+# --------------------------------------------
+# Additional datasets for specialized research
+
 hlrp_cdr = "132eWiCbSZKienhssNDRVk4DH9PmX8zVP"
 hlrp_convection = "1dW1mQ5Qh-CaJOWFAYF-aTUCq2HO_j5cy"
 hlrp_diffusion = "18_1N48-e8J4Ynr1SN7B5B9SFUMPSl5bd"

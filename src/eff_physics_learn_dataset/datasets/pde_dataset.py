@@ -155,8 +155,9 @@ class PDEDataset:
         *,
         seed: int,
         n_train: int,
-        method: Literal["convex_hull"] = "convex_hull",
+        method: Literal["convex_hull", "solution_percentile"] = "solution_percentile",
         bounds_margin: float = 0.0,
+        percentile: float = 50.0,
         n_interp: int | None = None,
         n_extrap: int | None = None,
         balance: bool = False,
@@ -173,11 +174,17 @@ class PDEDataset:
     ) -> Dict[str, "PDEDataset"]:
         """Few-shot split into train_few + interpolation + extrapolation.
 
-        Per plan:
-        - train_few is a seeded subset of the train pool (all \\ fixed_test).
-        - candidates are all non-training samples (train_pool_rest + fixed_test).
-        - interpolation/extrapolation is based on convex-hull membership in parameter space,
-          with an axis-aligned fallback if hull construction fails.
+        Methods:
+        - "solution_percentile" (default): Split by distance in solution space.
+          Samples closer than the percentile threshold are interp, farther are extrap.
+          This directly measures generalization difficulty and works robustly across all parameter spaces.
+        - "convex_hull": Split by convex hull membership in parameter space (legacy).
+          May have weak separation for multi-parameter PDEs with nonlinear solution manifolds.
+
+        Args:
+            method: Splitting method ("solution_percentile" or "convex_hull")
+            percentile: For solution_percentile, the distance percentile threshold (default: 50.0)
+            Other args: See inline docs
         """
 
         # Reuse authoritative test split only for defining the train pool.
@@ -194,18 +201,45 @@ class PDEDataset:
         train_few_idx = rng.choice(train_pool, size=int(n_train), replace=False)
 
         candidates_idx = np.setdiff1d(all_idx, train_few_idx, assume_unique=False)
-        train_params = self.params[train_few_idx]
-        cand_params = self.params[candidates_idx]
 
-        is_interp, is_extrap = split_interpolation_extrapolation(
-            train_params=train_params,
-            candidate_params=cand_params,
-            method=method,
-            bounds_margin=bounds_margin,
-        )
+        if method == "solution_percentile":
+            # Solution-space percentile splitting
+            union_idx = np.unique(np.concatenate([train_few_idx, candidates_idx]).astype(np.int64))
+            X = vectorize_solutions(
+                self.u[union_idx],
+                slice_axis=solution_slice_axis,
+                slice_index=solution_slice_index,
+            )
+            _, Z = fit_solution_pca(X, n_components=int(solution_n_components))
+            row = {int(i): j for j, i in enumerate(union_idx.tolist())}
 
-        interp_idx = candidates_idx[is_interp]
-        extrap_idx = candidates_idx[is_extrap]
+            Z_train = Z[np.asarray([row[int(i)] for i in train_few_idx], dtype=np.int64)]
+            Z_candidates = Z[np.asarray([row[int(i)] for i in candidates_idx], dtype=np.int64)]
+
+            # Compute NN distances
+            nn_distances = pairwise_min_distances(Z_candidates, Z_train)
+
+            # Split by percentile
+            threshold = np.percentile(nn_distances, percentile)
+            is_interp = nn_distances <= threshold
+            is_extrap = nn_distances > threshold
+
+            interp_idx = candidates_idx[is_interp]
+            extrap_idx = candidates_idx[is_extrap]
+        else:
+            # Legacy convex hull method
+            train_params = self.params[train_few_idx]
+            cand_params = self.params[candidates_idx]
+
+            is_interp, is_extrap = split_interpolation_extrapolation(
+                train_params=train_params,
+                candidate_params=cand_params,
+                method=method,
+                bounds_margin=bounds_margin,
+            )
+
+            interp_idx = candidates_idx[is_interp]
+            extrap_idx = candidates_idx[is_extrap]
 
         # Optional balancing/subsampling (use a separate RNG stream to keep train_few stable)
         sub_rng = np.random.default_rng(int(seed) + 1_000_003)
@@ -377,6 +411,16 @@ class PDEDataset:
         save_path: Path | str | None = None,
         title: str | None = None,
         seed: int = 0,
+        side_by_side: bool = False,
+        side_param_index: int = 0,
+        side_title: str | None = None,
+        side_mode: str = "param_hist",
+        side_scatter: Mapping[str, np.ndarray] | None = None,
+        side_values: Mapping[str, np.ndarray] | None = None,
+        side_cmap: str = "viridis",
+        side_colorbar_label: str | None = None,
+        side_density: bool = False,
+        side_log_y: bool = False,
     ):
         """Plot parameter distributions for provided splits (train/test or train_few/interp/extrap)."""
 
@@ -388,6 +432,16 @@ class PDEDataset:
             projection=projection,
             seed=seed,
             save_path=save_path,
+            side_by_side=side_by_side,
+            side_param_index=side_param_index,
+            side_title=side_title,
+            side_mode=side_mode,
+            side_scatter=side_scatter,
+            side_values=side_values,
+            side_cmap=side_cmap,
+            side_colorbar_label=side_colorbar_label,
+            side_density=side_density,
+            side_log_y=side_log_y,
         )
 
     def solution_similarity_report(

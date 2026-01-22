@@ -28,12 +28,13 @@ def get_standard_splits_info(ds: Any) -> Dict[str, Any]:
 
 
 def get_parametric_splits_info(
-    ds: Any, seed: int, n_train: int = 10, n_each: int = 20
+    ds: Any, seed: int, n_train: int = 10, n_each: int = 20, method: str = "solution_percentile"
 ) -> Dict[str, Any]:
     """Get parametric split information and distances."""
     ps = ds.parametric_splits(
         seed=seed,
         n_train=n_train,
+        method=method,
         balance=True,
         n_each=n_each,
         balance_strategy="random",
@@ -116,12 +117,19 @@ def main():
         "## Parametric Splits Summary",
         "",
         "This table shows parametric interpolation/extrapolation splits with balanced sampling.",
+        "**Method**: `solution_percentile` (default) - splits by distance in solution-space PCA.",
+        "Distances show mean nearest-neighbor distance to training samples in solution space.",
         "",
-        "| Equation | Parameter Range | n_train | n_interp | n_extrap | Seed 0 Interp | Seed 0 Extrap | Seed 1 Interp | Seed 1 Extrap | Seed 2 Interp | Seed 2 Extrap |",
-        "|----------|----------------|---------|----------|----------|---------------|---------------|---------------|---------------|---------------|---------------|",
+        "| Equation | Parameter Range | n_train | n_interp | n_extrap | Seed 0 Interp | Seed 0 Extrap | Seed 0 Ratio | Seed 1 Interp | Seed 1 Extrap | Seed 1 Ratio | Seed 2 Interp | Seed 2 Extrap | Seed 2 Ratio |",
+        "|----------|----------------|---------|----------|----------|---------------|---------------|--------------|---------------|---------------|--------------|---------------|---------------|--------------|",
     ]
     
     for data in parametric_data:
+        # Compute ratios
+        ratio_0 = data.get('seed_0_extrap', 0) / data.get('seed_0_interp', 1) if data.get('seed_0_interp') else None
+        ratio_1 = data.get('seed_1_extrap', 0) / data.get('seed_1_interp', 1) if data.get('seed_1_interp') else None
+        ratio_2 = data.get('seed_2_extrap', 0) / data.get('seed_2_interp', 1) if data.get('seed_2_interp') else None
+
         row = [
             data["equation"],
             data["param_range"],
@@ -130,10 +138,13 @@ def main():
             str(data.get("n_extrap", "N/A")),
             f"{data.get('seed_0_interp', 'N/A'):.2f}" if data.get('seed_0_interp') is not None else "N/A",
             f"{data.get('seed_0_extrap', 'N/A'):.2f}" if data.get('seed_0_extrap') is not None else "N/A",
+            f"{ratio_0:.2f}x" if ratio_0 is not None else "N/A",
             f"{data.get('seed_1_interp', 'N/A'):.2f}" if data.get('seed_1_interp') is not None else "N/A",
             f"{data.get('seed_1_extrap', 'N/A'):.2f}" if data.get('seed_1_extrap') is not None else "N/A",
+            f"{ratio_1:.2f}x" if ratio_1 is not None else "N/A",
             f"{data.get('seed_2_interp', 'N/A'):.2f}" if data.get('seed_2_interp') is not None else "N/A",
             f"{data.get('seed_2_extrap', 'N/A'):.2f}" if data.get('seed_2_extrap') is not None else "N/A",
+            f"{ratio_2:.2f}x" if ratio_2 is not None else "N/A",
         ]
         md_lines.append("| " + " | ".join(row) + " |")
     

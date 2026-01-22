@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
+
 from eff_physics_learn_dataset.datasets import load_pde_dataset
 
 
@@ -41,6 +43,18 @@ def main() -> None:
         "--diversify",
         action="store_true",
         help="(parametric mode) When using solution_nn balancing, pick a diverse subset within the top candidates.",
+    )
+    ap.add_argument(
+        "--method",
+        default="solution_percentile",
+        choices=["solution_percentile", "convex_hull"],
+        help="(parametric mode) Splitting method: solution_percentile (default, robust) or convex_hull (legacy).",
+    )
+    ap.add_argument(
+        "--percentile",
+        type=float,
+        default=50.0,
+        help="(parametric mode, solution_percentile) Distance percentile threshold (default: 50.0).",
     )
     ap.add_argument("--n-components", type=int, default=5, help="PCA components in solution space")
     ap.add_argument(
@@ -110,6 +124,16 @@ def main() -> None:
         help="How to plot params when P>2 (use 3d only when P==3).",
     )
     ap.add_argument(
+        "--param-nn-density",
+        action="store_true",
+        help="(param scatter) Plot nn-to-train histogram as density.",
+    )
+    ap.add_argument(
+        "--param-nn-log-y",
+        action="store_true",
+        help="(param scatter) Use log y-scale for nn-to-train histogram.",
+    )
+    ap.add_argument(
         "--out-dir",
         default=None,
         help="Output directory for all artifacts (default: docs/_assets/results/{equation}). Individual --out-* overrides this.",
@@ -139,6 +163,8 @@ def main() -> None:
         ps = ds.parametric_splits(
             seed=args.seed,
             n_train=args.n_train,
+            method=args.method,
+            percentile=args.percentile,
             balance=bool(args.balance),
             n_each=args.n_each,
             balance_strategy=args.balance_strategy,
@@ -213,12 +239,22 @@ def main() -> None:
     if out_params is None:
         out_params = out_dir / f"{args.equation}_{args.mode}_param_scatter.png"
     # Use same splits as the row plot
+    nn_values = {
+        name: np.asarray(report["splits"][name]["nn_to_train"], dtype=np.float32)
+        for name in rows_splits.keys()
+    }
     ds.plot_param_splits(
         splits=rows_splits,
         projection=args.param_projection,
         save_path=Path(out_params),
         title=f"{args.equation} {args.mode} param distribution",
         seed=int(args.seed),
+        side_by_side=True,
+        side_mode="nn_hist",
+        side_values=nn_values,
+        side_title="solution_space_nn_to_train",
+        side_density=bool(args.param_nn_density),
+        side_log_y=bool(args.param_nn_log_y),
     )
 
     print(f"Wrote: {out_json}")

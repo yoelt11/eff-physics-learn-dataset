@@ -263,6 +263,16 @@ def plot_param_points(
     projection: str = "auto",
     seed: int = 0,
     save_path: Path | str | None = None,
+    side_by_side: bool = False,
+    side_param_index: int = 0,
+    side_title: str | None = None,
+    side_mode: str = "param_hist",
+    side_scatter: Mapping[str, np.ndarray] | None = None,
+    side_values: Mapping[str, np.ndarray] | None = None,
+    side_cmap: str = "viridis",
+    side_colorbar_label: str | None = None,
+    side_density: bool = False,
+    side_log_y: bool = False,
 ) -> Any:
     """Plot param-space distributions for multiple splits.
 
@@ -309,13 +319,16 @@ def plot_param_points(
         else:
             colors[lab] = fallback_colors[i % len(fallback_colors)]
 
-    fig = plt.figure(figsize=(7.5, 6.2), constrained_layout=True)
+    fig = plt.figure(
+        figsize=(13.0, 6.2) if side_by_side else (7.5, 6.2),
+        constrained_layout=True,
+    )
 
     if title:
         fig.suptitle(title)
 
     if P == 1:
-        ax = fig.add_subplot(1, 1, 1)
+        ax = fig.add_subplot(1, 2, 1) if side_by_side else fig.add_subplot(1, 1, 1)
         for lab, a in splits.items():
             ax.hist(a[:, 0], bins=30, alpha=0.45, label=lab, color=colors[lab], density=True)
         ax.set_xlabel(param_names[0])
@@ -325,7 +338,7 @@ def plot_param_points(
         if P == 3 and projection == "3d":
             from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-            ax = fig.add_subplot(1, 1, 1, projection="3d")
+            ax = fig.add_subplot(1, 2, 1, projection="3d") if side_by_side else fig.add_subplot(1, 1, 1, projection="3d")
             for lab, a in splits.items():
                 ax.scatter(a[:, 0], a[:, 1], a[:, 2], s=50, alpha=0.8,
                           label=lab, color=colors[lab], edgecolors='black', linewidth=0.5)
@@ -334,7 +347,7 @@ def plot_param_points(
             ax.set_zlabel(param_names[2], fontweight='bold')
             ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
         else:
-            ax = fig.add_subplot(1, 1, 1)
+            ax = fig.add_subplot(1, 2, 1) if side_by_side else fig.add_subplot(1, 1, 1)
             if P == 2 or projection == "raw":
                 for lab, a in splits.items():
                     ax.scatter(a[:, 0], a[:, 1], s=50, alpha=0.8,
@@ -359,6 +372,118 @@ def plot_param_points(
                 ax.set_title("PCA projection (params)", fontweight='bold')
 
             ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+
+    if side_by_side:
+        ax_side = fig.add_subplot(1, 2, 2)
+        if side_mode == "param_hist":
+            if not (0 <= int(side_param_index) < P):
+                raise ValueError(f"side_param_index must be in [0, {P - 1}]")
+            idx = int(side_param_index)
+            if P == 1:
+                all_params = np.concatenate(arrays, axis=0)
+                ax_side.hist(
+                    all_params[:, idx],
+                    bins=30,
+                    alpha=0.65,
+                    color="#666666",
+                    density=True,
+                    label="all",
+                )
+                ax_side.legend()
+            else:
+                for lab, a in splits.items():
+                    ax_side.hist(
+                        a[:, idx],
+                        bins=30,
+                        alpha=0.45,
+                        label=lab,
+                        color=colors[lab],
+                        density=True,
+                    )
+                ax_side.legend()
+            ax_side.set_xlabel(param_names[idx])
+            ax_side.set_ylabel("density")
+        elif side_mode == "solution_pca":
+            if side_scatter is None:
+                raise ValueError("side_scatter is required when side_mode='solution_pca'")
+            all_vals = None
+            if side_values is not None:
+                all_vals = np.concatenate(
+                    [np.asarray(v, dtype=np.float32).ravel() for v in side_values.values()],
+                    axis=0,
+                )
+            vmin = float(np.min(all_vals)) if all_vals is not None and all_vals.size else None
+            vmax = float(np.max(all_vals)) if all_vals is not None and all_vals.size else None
+            markers = {
+                "train_few": "o",
+                "train": "o",
+                "interp": "s",
+                "extrap": "^",
+                "test": "D",
+                "val": "P",
+            }
+            mappable = None
+            for i, (lab, z) in enumerate(side_scatter.items()):
+                z = np.asarray(z)
+                if z.ndim != 2 or z.shape[1] < 2:
+                    raise ValueError("side_scatter entries must be (N,2+) arrays")
+                edge_color = colors.get(lab, fallback_colors[i % len(fallback_colors)])
+                vals = None
+                if side_values is not None:
+                    vals = np.asarray(side_values.get(lab, []), dtype=np.float32).ravel()
+                    if vals.shape[0] != z.shape[0]:
+                        raise ValueError("side_values must match side_scatter lengths per split")
+                sc = ax_side.scatter(
+                    z[:, 0],
+                    z[:, 1],
+                    s=60,
+                    alpha=0.85,
+                    label=lab,
+                    c=vals,
+                    cmap=side_cmap if vals is not None else None,
+                    vmin=vmin,
+                    vmax=vmax,
+                    edgecolors=edge_color,
+                    linewidth=0.7,
+                    marker=markers.get(lab, "o"),
+                )
+                if vals is not None:
+                    mappable = sc
+            ax_side.set_xlabel("PC1", fontweight="bold")
+            ax_side.set_ylabel("PC2", fontweight="bold")
+            ax_side.legend(loc="best", frameon=True, fancybox=True, shadow=True)
+            if mappable is not None:
+                cbar = fig.colorbar(mappable, ax=ax_side, fraction=0.046, pad=0.04)
+                if side_colorbar_label:
+                    cbar.set_label(side_colorbar_label)
+        elif side_mode == "nn_hist":
+            if side_values is None:
+                raise ValueError("side_values is required when side_mode='nn_hist'")
+            for i, lab in enumerate(labels):
+                vals = np.asarray(side_values.get(lab, []), dtype=np.float32).ravel()
+                vals = vals[np.isfinite(vals)]
+                if vals.size == 0:
+                    continue
+                color = colors.get(lab, fallback_colors[i % len(fallback_colors)])
+                ax_side.hist(
+                    vals,
+                    bins=30,
+                    alpha=0.6,
+                    label=lab,
+                    color=color,
+                    edgecolor="black",
+                    linewidth=0.5,
+                    density=bool(side_density),
+                )
+            ax_side.set_xlabel("nn_to_train", fontweight="bold")
+            ax_side.set_ylabel("density" if side_density else "count", fontweight="bold")
+            if side_log_y:
+                ax_side.set_yscale("log")
+            ax_side.legend(loc="best", frameon=True, fancybox=True, shadow=True)
+        else:
+            raise ValueError("side_mode must be 'param_hist', 'solution_pca', or 'nn_hist'")
+        if side_title:
+            ax_side.set_title(side_title)
 
     if save_path is not None:
         save_path = Path(save_path)

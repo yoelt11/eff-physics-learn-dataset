@@ -133,6 +133,9 @@ def plot_solution_grid(
     seed: int = 0,
     slice_index: int | None = None,
     slice_axis: int = 1,
+    plot_style: str = "contourf",
+    contour_levels: int = 12,
+    contour_line_color: str = "black",
     save_path: Path | str | None = None,
     title: str | None = None,
 ) -> Any:
@@ -194,14 +197,43 @@ def plot_solution_grid(
     for k, i in enumerate(chosen):
         r, c = divmod(k, side)
         ax = axes[r, c]
-        im = ax.imshow(solutions[i], origin="lower", aspect="auto")
+        field = solutions[i]
+
+        if plot_style == "contourf":
+            cf = ax.contourf(
+                field,
+                levels=int(contour_levels),
+                origin="lower",
+            )
+            ax.contour(
+                field,
+                levels=int(contour_levels),
+                colors=contour_line_color,
+                linewidths=0.4,
+                alpha=0.6,
+                origin="lower",
+            )
+            # Keep panel visually square regardless of subplot box size.
+            ax.set_aspect("equal", adjustable="box")
+            ax.set_box_aspect(1.0)
+            mappable = cf
+        else:
+            im = ax.imshow(field, origin="lower", aspect="auto")
+            mappable = im
         ax.axis("off")
         if param_dicts is not None:
             pd = param_dicts[i]
             small = ", ".join([f"{kk}={vv:.3g}" for kk, vv in list(pd.items())[:3]])
             ax.set_title(small, fontsize=8)
-        # Slightly larger pad so the colorbar does not crowd the panel.
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+
+        # Inset colorbar so it doesn't shrink the subplot panel.
+        if plot_style == "contourf":
+            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+            cax = inset_axes(ax, width="4%", height="85%", loc="center right", borderpad=1.0)
+            fig.colorbar(mappable, cax=cax, fraction=0.046, pad=0.01)
+        else:
+            fig.colorbar(mappable, ax=ax, fraction=0.046, pad=0.03)
 
     if save_path is not None:
         save_path = Path(save_path)
@@ -689,6 +721,10 @@ def plot_solution_rows(
                     origin="lower",
                     extent=extent,
                 )
+                # Keep the panel visually square independent of subplot box size.
+                # (Colorbars with constrained_layout can otherwise shrink the panel.)
+                axc.set_aspect("equal", adjustable="box")
+                axc.set_box_aspect(1.0)
                 mappable = cf
             else:
                 im = axc.imshow(
@@ -732,8 +768,15 @@ def plot_solution_rows(
             if title_parts:
                 axc.set_title(" | ".join(title_parts), fontsize=8)
 
-            # Increase pad so colorbars are visually separated from the panels.
-            fig.colorbar(mappable, ax=axc, fraction=0.046, pad=0.03)
+            # For contourf, use an inset colorbar so it doesn't steal panel width.
+            if plot_style == "contourf":
+                from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+                cax = inset_axes(axc, width="4%", height="85%", loc="center right", borderpad=1.0)
+                fig.colorbar(mappable, cax=cax, fraction=0.046, pad=0.01)
+            else:
+                # Increase pad so colorbars are visually separated from the panels.
+                fig.colorbar(mappable, ax=axc, fraction=0.046, pad=0.03)
 
     if save_path is not None:
         save_path = Path(save_path)

@@ -18,22 +18,24 @@ import gdown
 def _open_default_dataset_links() -> IO[bytes]:
     """Open the packaged default dataset links TOML.
 
-    This file is shipped with the installed wheel (see `pyproject.toml` hatch config),
-    but we resolve it via a simple path next to the installed package/module.
+    When installed via pip, hatch puts it at eff_physics_learn_dataset/configs/...
+    When running from a repo checkout, it lives at repo_root/configs/...
     """
 
-    # When installed, hatch places this under the installed prefix; when running
-    # from a checkout, we fall back to the repo-relative location.
-    here = Path(__file__).resolve()
-    # Try a relative configs/ path next to this module first (installed wheel case).
-    candidate = here.parent.parent / "configs" / "datasets" / "dataset_links.toml"
-    if candidate.exists():
-        return candidate.open("rb")
+    # Installed wheel: config is at site-packages/eff_physics_learn_dataset/configs/...
+    try:
+        import eff_physics_learn_dataset as _pkg
 
-    # Dev fallback (running from repo without built wheel):
-    # repo_root/configs/datasets/dataset_links.toml
-    repo_root = here.parent.parent
-    return (repo_root / "configs" / "datasets" / "dataset_links.toml").open("rb")
+        _base = Path(_pkg.__file__).resolve().parent
+        _candidate = _base / "configs" / "datasets" / "dataset_links.toml"
+        if _candidate.exists():
+            return _candidate.open("rb")
+    except Exception:
+        pass
+
+    # Dev fallback: repo root (this file is src/download.py -> parent.parent = repo root)
+    here = Path(__file__).resolve()
+    return (here.parent.parent / "configs" / "datasets" / "dataset_links.toml").open("rb")
 
 
 def load_dataset_links(config_path: Path | str | None = None) -> Dict[str, str]:

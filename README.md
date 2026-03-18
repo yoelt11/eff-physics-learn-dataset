@@ -15,6 +15,9 @@ This repository provides tools and utilities for downloading, processing, and wo
   - **seeded training budgets** (e.g. 25/50/75 or any `n_train`)
   - **parametric interpolation vs extrapolation** splits for few-shot training
 - **Plot smoke tests** (e.g. a 25-sample grid from the fixed test split)
+- Lightweight **PDE solvers** under `src/solvers/` (optional ground-truth generation), with an optional `backend="jax"` for JIT-friendly generation
+- Lightweight **verification** utilities in `src/verification.py` (NumPy-based checks for PDE residual + BC/IC sanity)
+- JAX-based **PINN loss functions** in `src/pinn_losses.py` for the included PDEs
 
 ## Available Datasets
 

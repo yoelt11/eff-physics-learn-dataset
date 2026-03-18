@@ -367,3 +367,80 @@ def verify_solution_ks(solution: np.ndarray, x_coords: np.ndarray,
     }
 
     return is_valid, metrics
+
+
+def verify_solution_wave2d1(
+    solution: np.ndarray,
+    x_coords: np.ndarray,
+    y_coords: np.ndarray,
+    t_coords: np.ndarray,
+    c_field: np.ndarray,
+    expected_u0: np.ndarray,
+    *,
+    absorb_width: int = 8,
+    pde_threshold: float = 2.0,
+    bc_threshold: float = 3e-1,
+    ic_threshold: float = 1e-3,
+) -> Tuple[bool, Dict]:
+    """Verify 2D wave equation solution satisfies PDE/BC/IC constraints.
+
+    PDE:
+        u_tt = c(x,y)^2 (u_xx + u_yy)
+
+    Indexing:
+        solution[k,i,j] = u(t[k], x[i], y[j]) with shape (n_t, n_x, n_y).
+
+    Notes:
+        For PDE residual we ignore the absorbing sponge border region.
+        The BC metric is a soft check: boundary energy should remain small under damping.
+    """
+    if solution.ndim != 3:
+        raise ValueError("solution must have shape (n_t, n_x, n_y)")
+
+    # Time derivatives
+    u_t = np.gradient(solution, t_coords, axis=0)
+    u_tt = np.gradient(u_t, t_coords, axis=0)
+
+    # Spatial second derivatives
+    u_x = np.gradient(solution, x_coords, axis=1)
+    u_xx = np.gradient(u_x, x_coords, axis=1)
+    u_y = np.gradient(solution, y_coords, axis=2)
+    u_yy = np.gradient(u_y, y_coords, axis=2)
+
+    pde_residual = u_tt - (c_field[None, :, :] ** 2) * (u_xx + u_yy)
+
+    aw = int(max(1, min(absorb_width, solution.shape[1] // 4, solution.shape[2] // 4)))
+    interior = pde_residual[:, aw:-aw, aw:-aw]
+    pde_loss = float(np.mean(interior**2))
+
+    # Boundary energy (soft metric for absorbing boundaries)
+    b_left = solution[:, 0, :]
+    b_right = solution[:, -1, :]
+    b_bottom = solution[:, :, 0]
+    b_top = solution[:, :, -1]
+    bc_loss = float(
+        0.25
+        * (
+            np.mean(b_left**2)
+            + np.mean(b_right**2)
+            + np.mean(b_bottom**2)
+            + np.mean(b_top**2)
+        )
+    )
+
+    ic_loss = float(np.mean((solution[0] - expected_u0) ** 2))
+
+    pde_ok = pde_loss < pde_threshold
+    bc_ok = bc_loss < bc_threshold
+    ic_ok = ic_loss < ic_threshold
+    is_valid = pde_ok and bc_ok and ic_ok
+
+    metrics = {
+        "pde_loss": pde_loss,
+        "bc_loss": bc_loss,
+        "ic_loss": ic_loss,
+        "pde_ok": pde_ok,
+        "bc_ok": bc_ok,
+        "ic_ok": ic_ok,
+    }
+    return is_valid, metrics

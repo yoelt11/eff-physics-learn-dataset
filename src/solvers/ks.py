@@ -16,7 +16,9 @@ import numpy as np
 
 from verification import verify_solution_ks
 
-from .utils import downsample_solution
+from typing import Literal
+
+from .utils import downsample_solution, downsample_solution_jax
 
 
 def create_periodic_grid(domain: tuple[float, float], n: int) -> np.ndarray:
@@ -73,10 +75,46 @@ def ks_etdrk4_coefficients(Lk: np.ndarray, dt: float, M: int = 64) -> tuple[np.n
     return E, E2, Q, f1, f2, f3
 
 
+def _ks_etdrk4_coefficients_jax(Lk, dt: float, M: int = 64):
+    """JAX version of ETDRK4 coefficients."""
+    import jax.numpy as jnp
+
+    E = jnp.exp(dt * Lk)
+    E2 = jnp.exp(dt * Lk / 2.0)
+
+    r = jnp.exp(1j * jnp.pi * (jnp.arange(1, M + 1) - 0.5) / M)
+    LR = dt * Lk[:, None] + r[None, :]
+
+    Q = dt * jnp.real(jnp.mean((jnp.exp(LR / 2.0) - 1.0) / LR, axis=1))
+    f1 = dt * jnp.real(
+        jnp.mean(
+            (-4.0 - LR + jnp.exp(LR) * (4.0 - 3.0 * LR + LR**2)) / (LR**3),
+            axis=1,
+        )
+    )
+    f2 = dt * jnp.real(
+        jnp.mean((2.0 + LR + jnp.exp(LR) * (-2.0 + LR)) / (LR**3), axis=1)
+    )
+    f3 = dt * jnp.real(
+        jnp.mean(
+            (-4.0 - 3.0 * LR - LR**2 + jnp.exp(LR) * (4.0 - LR)) / (LR**3),
+            axis=1,
+        )
+    )
+    return E, E2, Q, f1, f2, f3
+
+
 def nonlinear_hat(v_hat: np.ndarray, alpha: float, ik: np.ndarray) -> np.ndarray:
     """Nonlinear term in Fourier space: -(alpha/2) * d_x (u^2)."""
     u = np.fft.ifft(v_hat).real
     return -0.5 * alpha * ik * np.fft.fft(u**2)
+
+
+def _nonlinear_hat_jax(v_hat, alpha: float, ik):
+    import jax.numpy as jnp
+
+    u = jnp.fft.ifft(v_hat).real
+    return -0.5 * alpha * ik * jnp.fft.fft(u**2)
 
 
 def solve_ks(
@@ -123,6 +161,54 @@ def solve_ks(
     return np.asarray(saved, dtype=np.float64)
 
 
+def _solve_ks_jax(
+    *,
+    x: np.ndarray,
+    t: np.ndarray,
+    alpha: float,
+    beta: float,
+    gamma: float,
+    u0: np.ndarray,
+) -> np.ndarray:
+    """JAX-jitted KS solver (returns NumPy array)."""
+    import jax
+    import jax.numpy as jnp
+    from jax import lax
+
+    dt = float(t[1] - t[0])
+    if not np.allclose(np.diff(t), dt):
+        raise ValueError("ETDRK4 implementation requires a uniform temporal grid")
+
+    domain = (float(x[0]), float(x[0] + (x[1] - x[0]) * len(x)))
+    k = 2.0 * np.pi * np.fft.fftfreq(len(x), d=(domain[1] - domain[0]) / len(x))
+    ik = 1j * k
+
+    kj = jnp.asarray(k)
+    ikj = jnp.asarray(ik)
+    Lk = beta * kj**2 - gamma * kj**4
+    E, E2, Q, f1, f2, f3 = _ks_etdrk4_coefficients_jax(Lk, dt)
+
+    u_hat0 = jnp.fft.fft(jnp.asarray(u0, dtype=jnp.float64))
+
+    def step(u_hat, _):
+        Nv = _nonlinear_hat_jax(u_hat, alpha, ikj)
+        a = E2 * u_hat + Q * Nv
+        Na = _nonlinear_hat_jax(a, alpha, ikj)
+        b = E2 * u_hat + Q * Na
+        Nb = _nonlinear_hat_jax(b, alpha, ikj)
+        c = E2 * a + Q * (2.0 * Nb - Nv)
+        Nc = _nonlinear_hat_jax(c, alpha, ikj)
+        u_hat_next = E * u_hat + f1 * Nv + 2.0 * f2 * (Na + Nb) + f3 * Nc
+        u_next = jnp.fft.ifft(u_hat_next).real
+        return u_hat_next, u_next
+
+    # First frame at t=0
+    u0_real = jnp.fft.ifft(u_hat0).real
+    _, tail = lax.scan(step, u_hat0, xs=None, length=len(t) - 1)
+    U = jnp.concatenate([u0_real[None, :], tail], axis=0)
+    return np.asarray(jax.device_get(U), dtype=np.float64)
+
+
 def _downsample_periodic_solution(
     u_hires: np.ndarray,
     target_nt: int,
@@ -150,6 +236,7 @@ def generate_ks_sample(
     seed: int = 0,
     verify: bool = True,
     verify_thresholds: dict | None = None,
+    backend: Literal["numpy", "jax"] = "numpy",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool, dict]:
     """Generate a single verified KS solution sample.
 
@@ -161,19 +248,37 @@ def generate_ks_sample(
     t_hires = np.linspace(t_domain[0], t_domain[1], solver_nt, dtype=np.float64)
     u0_hires = initial_condition_ks(x_hires, noise_amplitude=noise_amplitude, seed=seed)
 
-    u_hires = solve_ks(
-        x=x_hires,
-        t=t_hires,
-        alpha=alpha,
-        beta=beta,
-        gamma=gamma,
-        u0=u0_hires,
-    )
+    if backend == "jax":
+        u_hires = _solve_ks_jax(x=x_hires, t=t_hires, alpha=alpha, beta=beta, gamma=gamma, u0=u0_hires)
+    elif backend == "numpy":
+        u_hires = solve_ks(
+            x=x_hires,
+            t=t_hires,
+            alpha=alpha,
+            beta=beta,
+            gamma=gamma,
+            u0=u0_hires,
+        )
+    else:
+        raise ValueError("backend must be 'numpy' or 'jax'")
 
-    u = _downsample_periodic_solution(u_hires, target_nt=target_nt, target_nx=target_nx)
+    if backend == "jax":
+        import jax
+        import jax.numpy as jnp
+
+        u_closed = np.concatenate([u_hires, u_hires[:, :1]], axis=1)
+        u_resized = downsample_solution_jax(jnp.asarray(u_closed), (target_nt, target_nx))
+        u = np.asarray(jax.device_get(u_resized), dtype=np.float64)
+        u[:, -1] = u[:, 0]
+        u0_closed = np.concatenate([u_hires[:1], u_hires[:1, :1]], axis=1)
+        u0_resized = downsample_solution_jax(jnp.asarray(u0_closed), (1, target_nx))
+        u0_target = np.asarray(jax.device_get(u0_resized), dtype=np.float64)[0]
+        u0_target[-1] = u0_target[0]
+    else:
+        u = _downsample_periodic_solution(u_hires, target_nt=target_nt, target_nx=target_nx)
+        u0_target = _downsample_periodic_solution(u_hires[:1], target_nt=1, target_nx=target_nx)[0]
     x = np.linspace(x_domain[0], x_domain[1], target_nx, dtype=np.float64)
     t = np.linspace(t_domain[0], t_domain[1], target_nt, dtype=np.float64)
-    u0_target = _downsample_periodic_solution(u_hires[:1], target_nt=1, target_nx=target_nx)[0]
 
     if verify:
         thresholds = verify_thresholds or {}

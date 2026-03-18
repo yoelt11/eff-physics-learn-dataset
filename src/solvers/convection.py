@@ -7,6 +7,8 @@ IC: u(x,0) = 1 + sin(2πx/L) where L = x_max - x_min
 Analytical solution: u(x,t) = 1 + sin(2π(x - βt)/L)
 """
 
+from typing import Literal
+
 import numpy as np
 
 
@@ -126,6 +128,7 @@ def generate_convection_sample_analytical(
     target_nt: int = 64,
     verify: bool = True,
     verify_thresholds: dict | None = None,
+    backend: Literal["numpy", "jax"] = "numpy",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool, dict]:
     """Generate a single verified Convection solution using analytical formula.
 
@@ -143,11 +146,24 @@ def generate_convection_sample_analytical(
         solution has shape (target_nt, target_nx) - transposed indexing
     """
     # Note: No high-res solving needed! Analytical solution is exact at any resolution
-    x = np.linspace(x_domain[0], x_domain[1], target_nx)
-    t = np.linspace(t_domain[0], t_domain[1], target_nt)
+    if backend == "jax":
+        import jax
+        import jax.numpy as jnp
 
-    # Compute analytical solution directly at target resolution
-    u = analytical_convection_solution(x, t, beta)
+        xj = jnp.linspace(x_domain[0], x_domain[1], target_nx)
+        tj = jnp.linspace(t_domain[0], t_domain[1], target_nt)
+        # Vectorized analytical solution: u(t,x) = 1 + sin(2π(x-βt)/L)
+        L = xj[-1] - xj[0]
+        X, T = jnp.meshgrid(xj, tj, indexing="xy")
+        u = 1.0 + jnp.sin(2.0 * jnp.pi * (X - beta * T) / L)
+        x = np.asarray(jax.device_get(xj))
+        t = np.asarray(jax.device_get(tj))
+        u = np.asarray(jax.device_get(u))
+    else:
+        x = np.linspace(x_domain[0], x_domain[1], target_nx)
+        t = np.linspace(t_domain[0], t_domain[1], target_nt)
+        # Compute analytical solution directly at target resolution
+        u = analytical_convection_solution(x, t, beta)
 
     # Verify solution using analytical derivatives (avoids numerical derivative errors)
     if verify:

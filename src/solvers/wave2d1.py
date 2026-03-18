@@ -18,11 +18,13 @@ Notes:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
-from .utils import downsample_solution
+from verification import verify_solution_wave2d1
+
+from .utils import downsample_solution, downsample_solution_jax
 
 
 def make_grid(
@@ -203,6 +205,99 @@ def simulate_wave_equation(
     }
 
 
+def _simulate_wave_equation_jax(
+    *,
+    nx: int,
+    ny: int,
+    nt: int,
+    x_domain: tuple[float, float],
+    y_domain: tuple[float, float],
+    c0: float,
+    sources: np.ndarray | None,
+    mixture: np.ndarray | None,
+    velocity_type: str,
+    absorb_width: int,
+    absorb_strength: float,
+) -> dict[str, np.ndarray | float]:
+    """JAX-jitted version of the 2D wave solver (returns NumPy arrays)."""
+    import jax
+    import jax.numpy as jnp
+    from jax import lax
+
+    x, y, xx, yy, dx, dy = make_grid(x_domain=x_domain, y_domain=y_domain, nx=nx, ny=ny)
+
+    if sources is None:
+        src = np.array([[0.0, 0.0, 0.2, 1.0]], dtype=np.float64)
+    else:
+        src = np.asarray(sources, dtype=np.float64)
+        if src.ndim != 2 or src.shape[1] != 4:
+            raise ValueError("sources must have shape (k, 4): [x0, y0, sd, amp]")
+
+    # JAX arrays
+    xxj = jnp.asarray(xx)
+    yyj = jnp.asarray(yy)
+
+    if velocity_type == "constant":
+        cj = jnp.asarray(constant_velocity_model(xx, yy, c0=c0))
+    elif velocity_type == "gaussian":
+        cj = jnp.asarray(gaussian_velocity_model(xx, yy, c0=c0, mixture=mixture))
+    else:
+        raise ValueError("velocity_type must be 'constant' or 'gaussian'")
+
+    cmax = float(np.max(np.asarray(cj)))
+    dt = 0.45 / (cmax * np.sqrt((1.0 / dx**2) + (1.0 / dy**2)))
+    tj = jnp.arange(nt, dtype=jnp.float64) * dt
+
+    # Initial displacement
+    p0 = gaussian_sources(xx, yy, src)
+    u0 = jnp.asarray(p0)
+
+    # Sponge mask
+    mask = jnp.asarray(
+        make_absorbing_mask(nx, ny, n_absorb=absorb_width, strength=absorb_strength)
+    )
+
+    def laplacian(u):
+        lap = jnp.zeros_like(u)
+        core = (
+            (u[2:, 1:-1] - 2.0 * u[1:-1, 1:-1] + u[:-2, 1:-1]) / (dx**2)
+            + (u[1:-1, 2:] - 2.0 * u[1:-1, 1:-1] + u[1:-1, :-2]) / (dy**2)
+        )
+        lap = lap.at[1:-1, 1:-1].set(core)
+        return lap
+
+    lap0 = laplacian(u0)
+    u1 = u0 + 0.5 * (dt**2) * (cj**2) * lap0
+    u0 = u0 * mask
+    u1 = u1 * mask
+
+    def step(carry, _):
+        um1, u = carry
+        lap = laplacian(u)
+        up1 = 2.0 * u - um1 + (dt**2) * (cj**2) * lap
+        up1 = up1 * mask
+        return (u, up1), up1
+
+    # Scan nt-2 steps producing frames 2..nt-1
+    (_, _), tail = lax.scan(step, (u0, u1), xs=None, length=nt - 2)
+    frames = jnp.concatenate([u0[None, ...], u1[None, ...], tail], axis=0)
+
+    out = {
+        "x": np.asarray(x, dtype=np.float32),
+        "y": np.asarray(y, dtype=np.float32),
+        "t": np.asarray(tj, dtype=np.float32),
+        "xx": np.asarray(xx, dtype=np.float32),
+        "yy": np.asarray(yy, dtype=np.float32),
+        "c": np.asarray(jax.device_get(cj), dtype=np.float32),
+        "u0": np.asarray(p0, dtype=np.float32),
+        "frames": np.asarray(jax.device_get(frames), dtype=np.float32),
+        "dt": float(dt),
+        "dx": float(dx),
+        "dy": float(dy),
+    }
+    return out
+
+
 def verify_wave2d1_solution(
     solution: np.ndarray,
     x_coords: np.ndarray,
@@ -281,6 +376,7 @@ def generate_wave2d1_sample(
     absorb_strength: float = 0.035,
     verify: bool = True,
     verify_thresholds: dict[str, float] | None = None,
+    backend: Literal["numpy", "jax"] = "numpy",
     dtype: Any = np.float32,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool, dict[str, float | bool]]:
     """Generate one verified 2D wave sample.
@@ -289,30 +385,55 @@ def generate_wave2d1_sample(
         (u, x, y, t, is_valid, metrics)
         with u shape (target_nt, target_nx, target_ny).
     """
-    sim = simulate_wave_equation(
-        nx=solver_nx,
-        ny=solver_ny,
-        nt=t_steps,
-        x_domain=x_domain,
-        y_domain=y_domain,
-        c0=c0,
-        sources=sources,
-        mixture=mixture,
-        velocity_type=velocity_type,
-        save_every=1,
-        absorb_width=absorb_width,
-        absorb_strength=absorb_strength,
-        dtype=np.float64,
-    )
+    if backend == "jax":
+        sim = _simulate_wave_equation_jax(
+            nx=solver_nx,
+            ny=solver_ny,
+            nt=t_steps,
+            x_domain=x_domain,
+            y_domain=y_domain,
+            c0=c0,
+            sources=sources,
+            mixture=mixture,
+            velocity_type=velocity_type,
+            absorb_width=absorb_width,
+            absorb_strength=absorb_strength,
+        )
+    elif backend == "numpy":
+        sim = simulate_wave_equation(
+            nx=solver_nx,
+            ny=solver_ny,
+            nt=t_steps,
+            x_domain=x_domain,
+            y_domain=y_domain,
+            c0=c0,
+            sources=sources,
+            mixture=mixture,
+            velocity_type=velocity_type,
+            save_every=1,
+            absorb_width=absorb_width,
+            absorb_strength=absorb_strength,
+            dtype=np.float64,
+        )
+    else:
+        raise ValueError("backend must be 'numpy' or 'jax'")
 
     u_hires = np.asarray(sim["frames"], dtype=np.float64)  # (nt, nx, ny)
     c_hires = np.asarray(sim["c"], dtype=np.float64)
     u0_hires = np.asarray(sim["u0"], dtype=np.float64)
 
     # Downsample to target tensor sizes.
-    u = downsample_solution(u_hires, (target_nt, target_nx, target_ny))
-    c_target = downsample_solution(c_hires, (target_nx, target_ny))
-    u0_target = downsample_solution(u0_hires, (target_nx, target_ny))
+    if backend == "jax":
+        import jax
+        import jax.numpy as jnp
+
+        u = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nt, target_nx, target_ny))), dtype=np.float64)
+        c_target = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(c_hires), (target_nx, target_ny))), dtype=np.float64)
+        u0_target = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(u0_hires), (target_nx, target_ny))), dtype=np.float64)
+    else:
+        u = downsample_solution(u_hires, (target_nt, target_nx, target_ny))
+        c_target = downsample_solution(c_hires, (target_nx, target_ny))
+        u0_target = downsample_solution(u0_hires, (target_nx, target_ny))
 
     x = np.linspace(x_domain[0], x_domain[1], target_nx, dtype=np.float64)
     y = np.linspace(y_domain[0], y_domain[1], target_ny, dtype=np.float64)
@@ -325,7 +446,7 @@ def generate_wave2d1_sample(
 
     if verify:
         thresholds = verify_thresholds or {}
-        is_valid, metrics = verify_wave2d1_solution(
+        is_valid, metrics = verify_solution_wave2d1(
             solution=u,
             x_coords=x,
             y_coords=y,

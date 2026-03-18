@@ -5,12 +5,14 @@ BC: Periodic
 IC: u(x,0) = A sin(kπx)
 """
 
+from typing import Literal
+
 import numpy as np
 from scipy.integrate import solve_ivp
 
 from verification import verify_solution_burgers
 
-from .utils import create_1d_grid, downsample_solution
+from .utils import create_1d_grid, downsample_solution, downsample_solution_jax
 
 
 def initial_condition_burgers(x: np.ndarray, A: float, k: float) -> np.ndarray:
@@ -101,6 +103,59 @@ def solve_burgers(
     return u
 
 
+def _solve_burgers_jax(
+    *,
+    x: np.ndarray,
+    t: np.ndarray,
+    nu: float,
+    A: float,
+    k: float,
+) -> np.ndarray:
+    """JAX-jitted Burgers solver on a periodic domain (returns NumPy array).
+
+    Uses pseudo-spectral derivatives in x and RK4 in time.
+    """
+    import jax
+    import jax.numpy as jnp
+    from jax import lax
+
+    x = np.asarray(x, dtype=np.float64)
+    t = np.asarray(t, dtype=np.float64)
+    dt = float(t[1] - t[0])
+    if not np.allclose(np.diff(t), dt):
+        raise ValueError("JAX Burgers backend requires a uniform temporal grid")
+
+    n = x.shape[0]
+    length = float(x[-1] - x[0])
+    kk = 2.0 * np.pi * np.fft.fftfreq(n, d=length / (n - 1))
+    ik = 1j * kk
+    k2 = kk**2
+
+    ikj = jnp.asarray(ik)
+    k2j = jnp.asarray(k2)
+
+    u0 = initial_condition_burgers(x, A, k)
+    u0j = jnp.asarray(u0, dtype=jnp.float64)
+
+    def rhs(u):
+        u_hat = jnp.fft.fft(u)
+        u_x = jnp.fft.ifft(ikj * u_hat).real
+        u_xx = jnp.fft.ifft(-k2j * u_hat).real
+        return -u * u_x + (nu * u_xx)
+
+    def step(u, _):
+        k1 = rhs(u)
+        k2_ = rhs(u + 0.5 * dt * k1)
+        k3 = rhs(u + 0.5 * dt * k2_)
+        k4 = rhs(u + dt * k3)
+        u_next = u + (dt / 6.0) * (k1 + 2.0 * k2_ + 2.0 * k3 + k4)
+        return u_next, u_next
+
+    _, tail = lax.scan(step, u0j, xs=None, length=len(t) - 1)
+    U = jnp.concatenate([u0j[None, :], tail], axis=0)
+    return np.asarray(jax.device_get(U), dtype=np.float64)
+
+
 def generate_burgers_sample(
     nu: float,
     A: float,
@@ -113,6 +168,7 @@ def generate_burgers_sample(
     target_nt: int = 64,
     verify: bool = True,
     verify_thresholds: dict | None = None,
+    backend: Literal["numpy", "jax"] = "numpy",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool, dict]:
     """Generate a single verified Burgers solution.
 
@@ -138,10 +194,21 @@ def generate_burgers_sample(
     t_hires = create_1d_grid(t_domain, solver_nt)
 
     # Solve on high-res grid
-    u_hires = solve_burgers(x_hires, t_hires, nu, A, k)
+    if backend == "jax":
+        u_hires = _solve_burgers_jax(x=x_hires, t=t_hires, nu=nu, A=A, k=k)
+    elif backend == "numpy":
+        u_hires = solve_burgers(x_hires, t_hires, nu, A, k)
+    else:
+        raise ValueError("backend must be 'numpy' or 'jax'")
 
     # Downsample to target grid
-    u = downsample_solution(u_hires, (target_nt, target_nx))
+    if backend == "jax":
+        import jax
+        import jax.numpy as jnp
+
+        u = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nt, target_nx))), dtype=np.float64)
+    else:
+        u = downsample_solution(u_hires, (target_nt, target_nx))
 
     # Create target grids for verification
     x = create_1d_grid(x_domain, target_nx)

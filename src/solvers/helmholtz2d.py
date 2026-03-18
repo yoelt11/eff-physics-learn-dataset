@@ -8,6 +8,8 @@ Source: q = [-(a₁π)² - (a₂π)² + k²] sin(a₁πx)sin(a₂πy)
 This version uses the analytical solution directly instead of solving numerically.
 """
 
+from typing import Literal
+
 import numpy as np
 
 
@@ -128,6 +130,7 @@ def generate_helmholtz2d_sample_analytical(
     target_ny: int = 64,
     verify: bool = True,
     verify_thresholds: dict | None = None,
+    backend: Literal["numpy", "jax"] = "numpy",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool, dict]:
     """Generate a single verified Helmholtz2D solution using analytical formula.
 
@@ -146,15 +149,27 @@ def generate_helmholtz2d_sample_analytical(
         (solution, x_coords, y_coords, is_valid, metrics)
         solution has shape (target_nx, target_ny) - standard indexing
     """
-    # Create target grids
-    x = np.linspace(x_domain[0], x_domain[1], target_nx)
-    y = np.linspace(y_domain[0], y_domain[1], target_ny)
+    if backend == "jax":
+        import jax
+        import jax.numpy as jnp
 
-    # Create meshgrid
-    X, Y = np.meshgrid(x, y, indexing='ij')
+        xj = jnp.linspace(x_domain[0], x_domain[1], target_nx)
+        yj = jnp.linspace(y_domain[0], y_domain[1], target_ny)
+        X, Y = jnp.meshgrid(xj, yj, indexing="ij")
+        u = jnp.sin(a1 * jnp.pi * X) * jnp.sin(a2 * jnp.pi * Y)
+        x = np.asarray(jax.device_get(xj))
+        y = np.asarray(jax.device_get(yj))
+        u = np.asarray(jax.device_get(u))
+    else:
+        # Create target grids
+        x = np.linspace(x_domain[0], x_domain[1], target_nx)
+        y = np.linspace(y_domain[0], y_domain[1], target_ny)
 
-    # Compute analytical solution directly
-    u = exact_solution_helmholtz2d(X, Y, a1, a2)
+        # Create meshgrid
+        X, Y = np.meshgrid(x, y, indexing='ij')
+
+        # Compute analytical solution directly
+        u = exact_solution_helmholtz2d(X, Y, a1, a2)
 
     # Verify solution using analytical derivatives
     if verify:

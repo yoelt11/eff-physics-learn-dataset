@@ -5,12 +5,14 @@ BC: Homogeneous Dirichlet (u = 0 at x = ±1)
 IC: u(x,0) = x² cos(πx)
 """
 
+from typing import Literal
+
 import numpy as np
 from scipy.integrate import solve_ivp
 
 from verification import verify_solution_allen_cahn
 
-from .utils import create_1d_grid, downsample_solution
+from .utils import create_1d_grid, downsample_solution, downsample_solution_jax
 
 
 def initial_condition_allen_cahn(x: np.ndarray) -> np.ndarray:
@@ -113,6 +115,62 @@ def solve_allen_cahn(
     return u
 
 
+def _solve_allen_cahn_jax(
+    *,
+    x: np.ndarray,
+    t: np.ndarray,
+    eps: float,
+    lam: float,
+) -> np.ndarray:
+    """JAX-jitted Allen–Cahn solver (returns NumPy array).
+
+    Uses second-order finite differences in x with Dirichlet BC (u=0 at both ends)
+    and RK4 in time.
+    """
+    import jax
+    import jax.numpy as jnp
+    from jax import lax
+
+    x = np.asarray(x, dtype=np.float64)
+    t = np.asarray(t, dtype=np.float64)
+    dt = float(t[1] - t[0])
+    if not np.allclose(np.diff(t), dt):
+        raise ValueError("JAX Allen–Cahn backend requires a uniform temporal grid")
+
+    dx = float(x[1] - x[0])
+    n = x.shape[0]
+
+    u0 = initial_condition_allen_cahn(x)
+    u0[0] = 0.0
+    u0[-1] = 0.0
+    u0j = jnp.asarray(u0, dtype=jnp.float64)
+
+    def laplacian(u):
+        out = jnp.zeros_like(u)
+        core = (u[2:] - 2.0 * u[1:-1] + u[:-2]) / (dx**2)
+        out = out.at[1:-1].set(core)
+        return out
+
+    def rhs(u):
+        u_xx = laplacian(u)
+        return (eps**2) * u_xx - lam * (u**3 - u)
+
+    def enforce_bc(u):
+        return u.at[0].set(0.0).at[-1].set(0.0)
+
+    def step(u, _):
+        k1 = rhs(u)
+        k2 = rhs(enforce_bc(u + 0.5 * dt * k1))
+        k3 = rhs(enforce_bc(u + 0.5 * dt * k2))
+        k4 = rhs(enforce_bc(u + dt * k3))
+        u_next = enforce_bc(u + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4))
+        return u_next, u_next
+
+    _, tail = lax.scan(step, u0j, xs=None, length=len(t) - 1)
+    U = jnp.concatenate([u0j[None, :], tail], axis=0)
+    return np.asarray(jax.device_get(U), dtype=np.float64)
+
+
 def generate_allen_cahn_sample(
     eps: float,
     lam: float,
@@ -124,6 +182,7 @@ def generate_allen_cahn_sample(
     target_nt: int = 64,
     verify: bool = True,
     verify_thresholds: dict | None = None,
+    backend: Literal["numpy", "jax"] = "numpy",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool, dict]:
     """Generate a single verified Allen-Cahn solution.
 
@@ -148,10 +207,21 @@ def generate_allen_cahn_sample(
     t_hires = create_1d_grid(t_domain, solver_nt)
 
     # Solve on high-res grid
-    u_hires = solve_allen_cahn(x_hires, t_hires, eps, lam)
+    if backend == "jax":
+        u_hires = _solve_allen_cahn_jax(x=x_hires, t=t_hires, eps=eps, lam=lam)
+    elif backend == "numpy":
+        u_hires = solve_allen_cahn(x_hires, t_hires, eps, lam)
+    else:
+        raise ValueError("backend must be 'numpy' or 'jax'")
 
     # Downsample to target grid
-    u = downsample_solution(u_hires, (target_nt, target_nx))
+    if backend == "jax":
+        import jax
+        import jax.numpy as jnp
+
+        u = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nt, target_nx))), dtype=np.float64)
+    else:
+        u = downsample_solution(u_hires, (target_nt, target_nx))
 
     # Create target grids for verification
     x = create_1d_grid(x_domain, target_nx)

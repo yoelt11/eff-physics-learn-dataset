@@ -111,6 +111,28 @@ def downsample_solution(u: np.ndarray, target_shape: tuple[int, ...]) -> np.ndar
     return zoom(u, zoom_factors, order=3)
 
 
+def downsample_solution_jax(u, target_shape: tuple[int, ...]):
+    """Downsample an array using JAX (for jit-compatible solver backends).
+
+    Uses `jax.image.resize` with linear interpolation. This is meant for solver outputs
+    where we want to avoid SciPy and stay within the JAX runtime.
+
+    Args:
+        u: JAX array
+        target_shape: Desired output shape
+
+    Returns:
+        Resized JAX array with shape `target_shape`.
+    """
+    import jax.image
+    import jax.numpy as jnp
+
+    # Use float32 math by default for performance; preserve dtype if already float64.
+    out_dtype = u.dtype
+    u = jnp.asarray(u)
+    return jax.image.resize(u, shape=tuple(target_shape), method="linear").astype(out_dtype)
+
+
 def create_laplacian_2d(nx: int, ny: int, dx: float, dy: float) -> np.ndarray:
     """Create sparse Laplacian matrix for 2D Poisson/Helmholtz equation.
 

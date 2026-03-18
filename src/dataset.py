@@ -7,9 +7,9 @@ from typing import Any, Dict, Literal, Mapping, Sequence
 
 import numpy as np
 
-from pkl_schema import infer_pde_pickle
-from similarity import solution_similarity_report
-from splitting import ParametricSplitConfig, compute_parametric_splits
+from src.pkl_schema import infer_pde_pickle
+from src.similarity import solution_similarity_report
+from src.splitting import ParametricSplitConfig, compute_parametric_splits
 
 BudgetName = Literal["low", "medium", "high"]
 

@@ -5,7 +5,7 @@ from typing import Callable, Dict, Literal
 
 import numpy as np
 
-from similarity import (
+from src.similarity import (
     farthest_point_subset,
     fit_solution_pca,
     pairwise_min_distances,

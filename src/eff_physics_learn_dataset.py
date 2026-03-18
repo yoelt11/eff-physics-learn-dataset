@@ -6,8 +6,8 @@ implementation lives in flat modules under `src/`.
 
 from __future__ import annotations
 
-from dataset import PDEDataset, load_pde_dataset
-from download import download_dataset, load_dataset_links
+from src.dataset import PDEDataset, load_pde_dataset
+from src.download import download_dataset, load_dataset_links
 
 __version__ = "0.1.0"
 

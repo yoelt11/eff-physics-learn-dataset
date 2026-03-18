@@ -241,7 +241,7 @@ class PDEDataset:
             for row in pmat
         ]
 
-        from plotting import plot_solution_grid
+        from .plotting import plot_solution_grid
 
         return plot_solution_grid(
             solutions=sol,
@@ -275,7 +275,7 @@ class PDEDataset:
     ):
         """Plot parameter distributions for provided splits (train/test or train_few/interp/extrap)."""
 
-        from plotting import plot_param_points
+        from .plotting import plot_param_points
 
         param_arrays = {name: self.params[np.asarray(ds.indices, dtype=np.int64)] for name, ds in splits.items()}
         return plot_param_points(
@@ -331,7 +331,7 @@ class PDEDataset:
     ):
         """Plot a histogram of solution-space distances from a similarity report."""
 
-        from plotting import plot_solution_similarity_hist
+        from .plotting import plot_solution_similarity_hist
 
         return plot_solution_similarity_hist(
             report=report,
@@ -378,7 +378,7 @@ class PDEDataset:
             T = np.asarray(self.grids["T_grid"])
             extent = (float(X.min()), float(X.max()), float(T.min()), float(T.max()))
 
-        from plotting import plot_solution_rows
+        from .plotting import plot_solution_rows
 
         return plot_solution_rows(
             solutions_by_split=solutions_by,

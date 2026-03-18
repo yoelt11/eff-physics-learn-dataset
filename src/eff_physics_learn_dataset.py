@@ -9,7 +9,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from src.dataset import PDEDataset, load_pde_dataset as _base_load_pde_dataset
+from src.dataset import PDEDataset
+from src.dataset import load_pde_dataset as _base_load_pde_dataset
 from src.download import download_dataset, load_dataset_links
 
 __version__ = "0.1.0"
@@ -58,7 +59,17 @@ def load_pde_dataset(
         # Ensure parent directory exists before download.
         root.mkdir(parents=True, exist_ok=True)
 
-        download_dataset(equation, data_dir=root)
+        links = load_dataset_links()
+        # Be permissive about casing of dataset names.
+        file_id = links.get(equation) or links.get(equation.lower()) or links.get(equation.upper())
+        if not file_id:
+            raise KeyError(
+                f"Unknown dataset '{equation}'. Available: {sorted(list(links.keys()))[:20]}..."
+            )
+
+        ok = download_dataset(name=equation, file_id=file_id, output_dir=root, extract=True)
+        if not ok:
+            raise RuntimeError(f"Failed to download dataset '{equation}' into: {root}")
         return _base_load_pde_dataset(equation, data_dir=root, cache=cache)
 
 

@@ -221,12 +221,14 @@ def plot_solution_grid(
             ax.set_box_aspect(1.0)
             mappable = cf
         else:
-            im = ax.imshow(field, origin="lower", aspect="auto")
+            ax.set_aspect("equal", adjustable="box")
+            ax.set_box_aspect(1.0)
+            im = ax.imshow(field, origin="lower", aspect="equal")
             mappable = im
         ax.axis("off")
 
         # Add a subtle border around the panel (use axes coords so it works with axis("off")).
-        if plot_style == "contourf":
+        if plot_style in {"contourf", "imshow"}:
             import matplotlib.patches as mpatches
 
             border = mpatches.Rectangle(
@@ -748,10 +750,12 @@ def plot_solution_rows(
                 axc.set_box_aspect(1.0)
                 mappable = cf
             else:
+                axc.set_aspect("equal", adjustable="box")
+                axc.set_box_aspect(1.0)
                 im = axc.imshow(
                     field,
                     origin="lower",
-                    aspect="auto",
+                    aspect="equal",
                     extent=extent,
                     vmin=vmin,
                     vmax=vmax,
@@ -774,7 +778,7 @@ def plot_solution_rows(
                 axc.axis("off")
 
             # Add a subtle border around contourf panels (even when axis("off")).
-            if plot_style == "contourf":
+            if plot_style in {"contourf", "imshow"}:
                 import matplotlib.patches as mpatches
 
                 border = mpatches.Rectangle(

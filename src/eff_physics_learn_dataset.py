@@ -40,6 +40,10 @@ def load_pde_dataset(
             provided, defaults to ``/tmp/eff-physics-learn-dataset`` or the value
             of the ``EFF_PHYSICS_LEARN_DATA_DIR`` environment variable.
     """
+    # Preserve legacy behavior: default to a local ./datasets root when data_dir is None.
+    if data_dir is None:
+        data_dir = "datasets"
+
     try:
         return _base_load_pde_dataset(equation, data_dir=data_dir, cache=cache)
     except FileNotFoundError:

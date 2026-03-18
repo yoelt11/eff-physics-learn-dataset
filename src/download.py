@@ -124,7 +124,36 @@ def download_dataset(
     print(f"{'='*60}")
 
     try:
-        gdown.download(url, str(output_path), quiet=False)
+        # gdown caches cookie/home paths at import time (see gdown/download.py).
+        # If ~/.cache/gdown isn't writable, redirect gdown to write into our
+        # output directory instead.
+        try:
+            import importlib
+
+            gdown_cached_download = importlib.import_module("gdown.cached_download")
+            gdown_download = importlib.import_module("gdown.download")
+
+            # Redirect all gdown cache/cookies writes away from ~/
+            # (sandbox environments often block writes to it).
+            new_home = str(output_dir.resolve())
+            gdown_download.home = new_home
+            gdown_cached_download.cache_root = os.path.join(new_home, ".cache", "gdown")
+
+            # Ensure the destination cookie/cache dirs exist.
+            (output_dir.resolve() / ".cache" / "gdown").mkdir(
+                parents=True, exist_ok=True
+            )
+        except Exception:
+            # If we can't redirect gdown's internal paths, proceed; gdown
+            # will raise a helpful error.
+            pass
+
+        try:
+            # Retry without cookies first.
+            gdown.download(url, str(output_path), quiet=False, use_cookies=False)
+        except Exception:
+            # Retry with cookies enabled for cases where gdown needs them.
+            gdown.download(url, str(output_path), quiet=False, use_cookies=True)
 
         if extract and output_path.exists():
             import zipfile

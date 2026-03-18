@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verification import verify_solution_ks
+from ..verification import verify_solution_ks
 
 from typing import Literal
 

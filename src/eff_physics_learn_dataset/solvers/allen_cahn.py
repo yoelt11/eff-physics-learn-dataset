@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from verification import verify_solution_allen_cahn
+from ..verification import verify_solution_allen_cahn
 
 from .utils import create_1d_grid, downsample_solution, downsample_solution_jax
 

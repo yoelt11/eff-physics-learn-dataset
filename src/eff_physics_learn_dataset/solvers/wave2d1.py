@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from verification import verify_solution_wave2d1
+from ..verification import verify_solution_wave2d1
 
 from .utils import downsample_solution, downsample_solution_jax
 

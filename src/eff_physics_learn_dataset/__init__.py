@@ -1,17 +1,13 @@
-"""Thin convenience module exposing the flat dataset API.
-
-This keeps `import eff_physics_learn_dataset` working while the actual
-implementation lives in flat modules under `src/`.
-"""
+"""Efficient Physics Learning Datasets - utilities for loading and working with PDE datasets."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from src.dataset import PDEDataset
-from src.dataset import load_pde_dataset as _base_load_pde_dataset
-from src.download import download_dataset, load_dataset_links
+from .dataset import PDEDataset
+from .dataset import load_pde_dataset as _base_load_pde_dataset
+from .download import download_dataset, load_dataset_links
 
 __version__ = "0.1.0"
 
@@ -32,7 +28,7 @@ def load_pde_dataset(
       download the dataset into a known temporary location and reload from there.
 
     Args:
-        equation: Name of the equation/dataset (e.g. \"burgers\").
+        equation: Name of the equation/dataset (e.g. "burgers").
         data_dir: Optional root directory containing ``{equation}/ground_truth``.
         cache: Whether to use the dataset-level LRU cache (unchanged behavior).
         auto_download: If True, automatically call ``download_dataset`` when the
@@ -41,7 +37,6 @@ def load_pde_dataset(
             provided, defaults to ``/tmp/eff-physics-learn-dataset`` or the value
             of the ``EFF_PHYSICS_LEARN_DATA_DIR`` environment variable.
     """
-    # Preserve legacy behavior: default to a local ./datasets root when data_dir is None.
     if data_dir is None:
         data_dir = "datasets"
 
@@ -56,11 +51,9 @@ def load_pde_dataset(
             or os.environ.get("EFF_PHYSICS_LEARN_DATA_DIR", "/tmp/eff-physics-learn-dataset")
         ).expanduser()
 
-        # Ensure parent directory exists before download.
         root.mkdir(parents=True, exist_ok=True)
 
         links = load_dataset_links()
-        # Be permissive about casing of dataset names.
         file_id = links.get(equation) or links.get(equation.lower()) or links.get(equation.upper())
         if not file_id:
             raise KeyError(
@@ -80,4 +73,3 @@ __all__ = [
     "PDEDataset",
     "__version__",
 ]
-

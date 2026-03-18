@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -189,7 +190,9 @@ def plot_solution_grid(
     axes = np.atleast_1d(axes).reshape(side, side)
 
     if title is not None:
-        fig.suptitle(title)
+        # Smaller + snake_case for consistent titles in generated plots.
+        title_snake = re.sub(r"[^a-zA-Z0-9]+", "_", str(title).strip().lower()).strip("_")
+        fig.suptitle(title_snake, fontsize=10, y=1.03)
 
     for ax in axes.ravel():
         ax.axis("off")
@@ -209,8 +212,8 @@ def plot_solution_grid(
                 field,
                 levels=int(contour_levels),
                 colors=contour_line_color,
-                linewidths=0.4,
-                alpha=0.6,
+                linewidths=0.22,
+                alpha=0.55,
                 origin="lower",
             )
             # Keep panel visually square regardless of subplot box size.
@@ -221,19 +224,35 @@ def plot_solution_grid(
             im = ax.imshow(field, origin="lower", aspect="auto")
             mappable = im
         ax.axis("off")
+
+        # Add a subtle border around the panel (use axes coords so it works with axis("off")).
+        if plot_style == "contourf":
+            import matplotlib.patches as mpatches
+
+            border = mpatches.Rectangle(
+                (0.0, 0.0),
+                1.0,
+                1.0,
+                transform=ax.transAxes,
+                fill=False,
+                linewidth=1.0,
+                edgecolor="black",
+                zorder=10,
+            )
+            ax.add_patch(border)
         if param_dicts is not None:
             pd = param_dicts[i]
             small = ", ".join([f"{kk}={vv:.3g}" for kk, vv in list(pd.items())[:3]])
             ax.set_title(small, fontsize=8)
 
-        # Inset colorbar so it doesn't shrink the subplot panel.
         if plot_style == "contourf":
-            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-
-            cax = inset_axes(ax, width="4%", height="85%", loc="center right", borderpad=1.0)
-            fig.colorbar(mappable, cax=cax, fraction=0.046, pad=0.01)
+            # Put colorbar outside the panel to avoid covering contours.
+            cbar = fig.colorbar(mappable, ax=ax, fraction=0.04, pad=0.02)
         else:
-            fig.colorbar(mappable, ax=ax, fraction=0.046, pad=0.03)
+            cbar = fig.colorbar(mappable, ax=ax, fraction=0.04, pad=0.02)
+        # Make the colorbar visually lighter than the panel.
+        cbar.ax.tick_params(labelsize=9, width=0.8)
+        cbar.outline.set_linewidth(0.8)
 
     if save_path is not None:
         save_path = Path(save_path)
@@ -487,7 +506,8 @@ def plot_param_points(
     )
 
     if title:
-        fig.suptitle(title)
+        title_snake = re.sub(r"[^a-zA-Z0-9]+", "_", str(title).strip().lower()).strip("_")
+        fig.suptitle(title_snake, fontsize=10, y=1.03)
 
     use_3d = P == 3 and projection == "3d"
     if use_3d:
@@ -652,7 +672,8 @@ def plot_solution_rows(
     )
 
     if title:
-        fig.suptitle(title)
+        title_snake = re.sub(r"[^a-zA-Z0-9]+", "_", str(title).strip().lower()).strip("_")
+        fig.suptitle(title_snake, fontsize=10, y=1.03)
 
     if plot_style not in {"imshow", "contourf"}:
         raise ValueError("plot_style must be 'imshow' or 'contourf'")
@@ -716,8 +737,8 @@ def plot_solution_rows(
                     field,
                     levels=int(contour_levels),
                     colors=contour_line_color,
-                    linewidths=0.4,
-                    alpha=0.6,
+                    linewidths=0.22,
+                    alpha=0.55,
                     origin="lower",
                     extent=extent,
                 )
@@ -752,6 +773,22 @@ def plot_solution_rows(
             else:
                 axc.axis("off")
 
+            # Add a subtle border around contourf panels (even when axis("off")).
+            if plot_style == "contourf":
+                import matplotlib.patches as mpatches
+
+                border = mpatches.Rectangle(
+                    (0.0, 0.0),
+                    1.0,
+                    1.0,
+                    transform=axc.transAxes,
+                    fill=False,
+                    linewidth=1.0,
+                    edgecolor="black",
+                    zorder=10,
+                )
+                axc.add_patch(border)
+
             title_parts = []
             if params_by_split is not None and split in params_by_split:
                 pdicts = params_by_split[split]
@@ -768,15 +805,13 @@ def plot_solution_rows(
             if title_parts:
                 axc.set_title(" | ".join(title_parts), fontsize=8)
 
-            # For contourf, use an inset colorbar so it doesn't steal panel width.
             if plot_style == "contourf":
-                from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-
-                cax = inset_axes(axc, width="4%", height="85%", loc="center right", borderpad=1.0)
-                fig.colorbar(mappable, cax=cax, fraction=0.046, pad=0.01)
+                # Colorbar outside the panel to avoid covering contours.
+                cbar = fig.colorbar(mappable, ax=axc, fraction=0.04, pad=0.02)
             else:
-                # Increase pad so colorbars are visually separated from the panels.
-                fig.colorbar(mappable, ax=axc, fraction=0.046, pad=0.03)
+                cbar = fig.colorbar(mappable, ax=axc, fraction=0.04, pad=0.02)
+            cbar.ax.tick_params(labelsize=9, width=0.8)
+            cbar.outline.set_linewidth(0.8)
 
     if save_path is not None:
         save_path = Path(save_path)

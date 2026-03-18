@@ -217,13 +217,15 @@ def plot_solution_grid(
                 origin="lower",
             )
             # Keep panel visually square regardless of subplot box size.
-            ax.set_aspect("equal", adjustable="box")
+            # Use "auto" aspect so the filled region spans the panel.
+            ax.set_aspect("auto", adjustable="box")
             ax.set_box_aspect(1.0)
             mappable = cf
         else:
-            ax.set_aspect("equal", adjustable="box")
+            # Use "auto" aspect so the image spans the panel.
+            ax.set_aspect("auto", adjustable="box")
             ax.set_box_aspect(1.0)
-            im = ax.imshow(field, origin="lower", aspect="equal")
+            im = ax.imshow(field, origin="lower", aspect="auto")
             mappable = im
         ax.axis("off")
 
@@ -746,16 +748,16 @@ def plot_solution_rows(
                 )
                 # Keep the panel visually square independent of subplot box size.
                 # (Colorbars with constrained_layout can otherwise shrink the panel.)
-                axc.set_aspect("equal", adjustable="box")
+                axc.set_aspect("auto", adjustable="box")
                 axc.set_box_aspect(1.0)
                 mappable = cf
             else:
-                axc.set_aspect("equal", adjustable="box")
+                axc.set_aspect("auto", adjustable="box")
                 axc.set_box_aspect(1.0)
                 im = axc.imshow(
                     field,
                     origin="lower",
-                    aspect="equal",
+                    aspect="auto",
                     extent=extent,
                     vmin=vmin,
                     vmax=vmax,
@@ -776,6 +778,13 @@ def plot_solution_rows(
                     axc.set_yticks([])
             else:
                 axc.axis("off")
+
+            # Ensure the filled region spans the full enclosing box.
+            # When `extent` is provided, explicitly set axis limits.
+            if extent is not None:
+                axc.set_xlim(extent[0], extent[1])
+                axc.set_ylim(extent[2], extent[3])
+                axc.margins(x=0, y=0)
 
             # Add a subtle border around contourf panels (even when axis("off")).
             if plot_style in {"contourf", "imshow"}:

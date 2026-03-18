@@ -4,7 +4,7 @@ This repo ships PDE datasets on disk under:
 
 `datasets/{equation}/ground_truth/*`
 
-The Python API in `eff_physics_learn_dataset.datasets` provides a small HuggingFace-`datasets`-style interface for:
+The Python API in `eff_physics_learn_dataset` provides a small HuggingFace-`datasets`-style interface for:
 - **seeded, dynamic training budgets** (not hard-coded)
 - a **fixed test split** via `test_indices.pkl`
 - **parametric interpolation vs extrapolation** splits for few-shot training
@@ -18,7 +18,7 @@ uv sync
 ## Load a dataset
 
 ```python
-from eff_physics_learn_dataset.datasets import load_pde_dataset
+from eff_physics_learn_dataset import load_pde_dataset
 
 ds = load_pde_dataset("helmholtz2D")  # also: "burgers", "allen_cahn", ...
 print(len(ds), ds.param_names, ds.u.shape)

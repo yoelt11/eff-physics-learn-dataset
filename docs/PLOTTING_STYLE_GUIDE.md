@@ -66,7 +66,7 @@ The style is automatically applied when using functions from:
 To manually apply the style in custom scripts:
 
 ```python
-from eff_physics_learn_dataset.datasets.plotting import maybe_apply_style
+from eff_physics_learn_dataset.plotting import maybe_apply_style
 
 maybe_apply_style()
 ```

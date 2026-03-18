@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from eff_physics_learn_dataset.datasets import load_pde_dataset
+from eff_physics_learn_dataset import load_pde_dataset
 
 
 def main() -> None:

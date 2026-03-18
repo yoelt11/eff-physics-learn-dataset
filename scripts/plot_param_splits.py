@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from eff_physics_learn_dataset.datasets import load_pde_dataset
-from eff_physics_learn_dataset.datasets.solution_similarity import fit_solution_pca, vectorize_solutions
+from eff_physics_learn_dataset import load_pde_dataset
+from eff_physics_learn_dataset.similarity import fit_solution_pca, vectorize_solutions
 
 
 def _to_snake_case(text: str) -> str:

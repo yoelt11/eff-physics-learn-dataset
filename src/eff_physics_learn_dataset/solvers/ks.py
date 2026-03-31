@@ -245,7 +245,12 @@ def generate_ks_sample(
         where solution has shape (target_nt, target_nx).
     """
     x_hires = create_periodic_grid(x_domain, solver_nx)
-    t_hires = np.linspace(t_domain[0], t_domain[1], solver_nt, dtype=np.float64)
+    t0, t1 = float(t_domain[0]), float(t_domain[1])
+    # ETDRK4 can blow up for very coarse temporal grids; enforce a safe internal dt.
+    dt_max = 0.25
+    min_solver_nt = int(np.ceil((t1 - t0) / dt_max)) + 1
+    effective_solver_nt = max(int(solver_nt), min_solver_nt)
+    t_hires = np.linspace(t0, t1, effective_solver_nt, dtype=np.float64)
     u0_hires = initial_condition_ks(x_hires, noise_amplitude=noise_amplitude, seed=seed)
 
     if backend == "jax":

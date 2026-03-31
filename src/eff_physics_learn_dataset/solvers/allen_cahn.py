@@ -2,7 +2,7 @@
 
 PDE: u_t = ε² u_xx - λ(u³ - u)
 BC: Homogeneous Dirichlet (u = 0 at x = ±1)
-IC: u(x,0) = x² cos(πx)
+IC: u(x,0) = (1 - x²) cos(πx)
 """
 
 from typing import Literal
@@ -16,7 +16,7 @@ from .utils import create_1d_grid, downsample_solution, downsample_solution_jax
 
 
 def initial_condition_allen_cahn(x: np.ndarray) -> np.ndarray:
-    """Allen-Cahn initial condition: u(x,0) = x² cos(πx).
+    """Allen-Cahn initial condition: u(x,0) = (1 - x²) cos(πx).
 
     Args:
         x: 1D spatial grid
@@ -24,7 +24,7 @@ def initial_condition_allen_cahn(x: np.ndarray) -> np.ndarray:
     Returns:
         Initial condition array
     """
-    return x**2 * np.cos(np.pi * x)
+    return (1.0 - x**2) * np.cos(np.pi * x)
 
 
 def spatial_derivative_allen_cahn(u: np.ndarray, dx: float, eps: float, lam: float) -> np.ndarray:

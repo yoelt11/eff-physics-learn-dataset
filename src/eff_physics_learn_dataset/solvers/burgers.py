@@ -2,7 +2,7 @@
 
 PDE: u_t + u·u_x = ν u_xx
 BC: Periodic
-IC: u(x,0) = A sin(kπx)
+IC: u(x,0) = A sin(kπx), with integer mode k
 """
 
 from typing import Literal
@@ -15,13 +15,15 @@ from ..verification import verify_solution_burgers
 from .utils import create_1d_grid, downsample_solution, downsample_solution_jax
 
 
-def initial_condition_burgers(x: np.ndarray, A: float, k: float) -> np.ndarray:
+def initial_condition_burgers(x: np.ndarray, A: float, k: int) -> np.ndarray:
     """Burgers initial condition: u(x,0) = A sin(kπx).
+
+    For periodic BC on ``[-1, 1]``, ``k`` must be an integer Fourier mode.
 
     Args:
         x: 1D spatial grid (assumed domain [-1, 1])
         A: Amplitude
-        k: Wavenumber
+        k: Integer wavenumber (Fourier mode)
 
     Returns:
         Initial condition array
@@ -57,7 +59,7 @@ def solve_burgers(
     t: np.ndarray,
     nu: float,
     A: float,
-    k: float,
+    k: int,
 ) -> np.ndarray:
     """Solve Burgers equation using scipy.integrate.solve_ivp.
 
@@ -66,11 +68,18 @@ def solve_burgers(
         t: Temporal grid (n_t,)
         nu: Viscosity
         A: IC amplitude
-        k: IC wavenumber
+        k: Integer IC wavenumber (Fourier mode)
 
     Returns:
         Solution u with shape (n_t, n_x) - transposed indexing!
     """
+    # Enforce periodic consistency for IC on [-1, 1].
+    if not np.isclose(k, round(k), atol=1e-12):
+        raise ValueError(
+            "For periodic BC on [-1, 1], k must be an integer so "
+            "u(x,0)=A sin(k*pi*x) is periodic."
+        )
+
     dx = x[1] - x[0]
     n_x = len(x)
 
@@ -109,12 +118,18 @@ def _solve_burgers_jax(
     t: np.ndarray,
     nu: float,
     A: float,
-    k: float,
+    k: int,
 ) -> np.ndarray:
     """JAX-jitted Burgers solver on a periodic domain (returns NumPy array).
 
     Uses pseudo-spectral derivatives in x and RK4 in time.
     """
+    if not np.isclose(k, round(k), atol=1e-12):
+        raise ValueError(
+            "For periodic BC on [-1, 1], k must be an integer so "
+            "u(x,0)=A sin(k*pi*x) is periodic."
+        )
+
     import jax
     import jax.numpy as jnp
     from jax import lax
@@ -159,7 +174,7 @@ def _solve_burgers_jax(
 def generate_burgers_sample(
     nu: float,
     A: float,
-    k: float,
+    k: int,
     x_domain: tuple[float, float] = (-1.0, 1.0),
     t_domain: tuple[float, float] = (0.0, 1.0),
     solver_nx: int = 128,
@@ -175,7 +190,7 @@ def generate_burgers_sample(
     Args:
         nu: Viscosity
         A: IC amplitude
-        k: IC wavenumber
+        k: Integer IC wavenumber (Fourier mode)
         x_domain: Spatial domain (xmin, xmax)
         t_domain: Temporal domain (tmin, tmax)
         solver_nx: High-res spatial grid size
@@ -240,7 +255,7 @@ if __name__ == "__main__":
     # Use parameters from inspection (smaller amplitude for better stability)
     nu = 0.15
     A = 1.0
-    k = 1.0
+    k = 1
 
     u, x, t, is_valid, metrics = generate_burgers_sample(
         nu=nu,

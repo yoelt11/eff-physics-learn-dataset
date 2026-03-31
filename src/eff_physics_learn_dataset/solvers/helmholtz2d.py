@@ -12,6 +12,8 @@ from typing import Literal
 
 import numpy as np
 
+from .utils import validate_solution_coordinates
+
 
 def exact_solution_helmholtz2d(x: np.ndarray, y: np.ndarray, a1: float, a2: float) -> np.ndarray:
     """Exact solution for manufactured Helmholtz2D problem.
@@ -170,6 +172,13 @@ def generate_helmholtz2d_sample_analytical(
 
         # Compute analytical solution directly
         u = exact_solution_helmholtz2d(X, Y, a1, a2)
+
+    validate_solution_coordinates(
+        u,
+        coords={"x": x, "y": y},
+        axis_map={"x": 0, "y": 1},
+        context="Helmholtz2D output",
+    )
 
     # Verify solution using analytical derivatives
     if verify:

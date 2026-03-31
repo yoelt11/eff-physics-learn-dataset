@@ -24,7 +24,7 @@ import numpy as np
 
 from ..verification import verify_solution_wave2d1
 
-from .utils import downsample_solution, downsample_solution_jax
+from .utils import downsample_solution, downsample_solution_jax, validate_solution_coordinates
 
 
 def make_grid(
@@ -442,6 +442,13 @@ def generate_wave2d1_sample(
         float(np.asarray(sim["t"])[-1]),
         target_nt,
         dtype=np.float64,
+    )
+
+    validate_solution_coordinates(
+        u,
+        coords={"t": t, "x": x, "y": y},
+        axis_map={"t": 0, "x": 1, "y": 2},
+        context="Wave2D1 output",
     )
 
     if verify:

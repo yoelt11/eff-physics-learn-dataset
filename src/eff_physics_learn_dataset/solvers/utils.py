@@ -193,3 +193,41 @@ def sample_parameters(param_ranges: dict, n_samples: int, seed: int = 0) -> dict
     for name, bounds in param_ranges.items():
         samples[name] = rng.uniform(bounds["min"], bounds["max"], size=n_samples)
     return samples
+
+
+def validate_solution_coordinates(
+    solution: np.ndarray,
+    *,
+    coords: dict[str, np.ndarray],
+    axis_map: dict[str, int],
+    context: str,
+) -> None:
+    """Validate that coordinate arrays are consistent with solution axes.
+
+    Args:
+        solution: Solution tensor.
+        coords: Mapping of coordinate name -> 1D coordinate array.
+        axis_map: Mapping of coordinate name -> axis index in `solution`.
+        context: Human-readable context for error messages.
+    """
+    if solution.ndim <= 0:
+        raise ValueError(f"{context}: solution must have at least one dimension")
+
+    for name, coord in coords.items():
+        if name not in axis_map:
+            raise ValueError(f"{context}: missing axis mapping for coordinate '{name}'")
+
+        coord_arr = np.asarray(coord)
+        if coord_arr.ndim != 1:
+            raise ValueError(f"{context}: coordinate '{name}' must be 1D")
+
+        axis = axis_map[name]
+        if axis < 0 or axis >= solution.ndim:
+            raise ValueError(f"{context}: axis {axis} for '{name}' is out of bounds")
+
+        if solution.shape[axis] != coord_arr.shape[0]:
+            raise ValueError(
+                f"{context}: shape mismatch for '{name}': "
+                f"solution axis {axis} has size {solution.shape[axis]}, "
+                f"but coordinate has size {coord_arr.shape[0]}"
+            )

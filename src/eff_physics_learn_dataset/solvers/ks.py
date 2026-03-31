@@ -18,7 +18,7 @@ from ..verification import verify_solution_ks
 
 from typing import Literal
 
-from .utils import downsample_solution, downsample_solution_jax
+from .utils import downsample_solution, downsample_solution_jax, validate_solution_coordinates
 
 
 def create_periodic_grid(domain: tuple[float, float], n: int) -> np.ndarray:
@@ -279,6 +279,13 @@ def generate_ks_sample(
         u0_target = _downsample_periodic_solution(u_hires[:1], target_nt=1, target_nx=target_nx)[0]
     x = np.linspace(x_domain[0], x_domain[1], target_nx, dtype=np.float64)
     t = np.linspace(t_domain[0], t_domain[1], target_nt, dtype=np.float64)
+
+    validate_solution_coordinates(
+        u,
+        coords={"t": t, "x": x},
+        axis_map={"t": 0, "x": 1},
+        context="KS output",
+    )
 
     if verify:
         thresholds = verify_thresholds or {}

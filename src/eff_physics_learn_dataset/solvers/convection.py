@@ -11,6 +11,8 @@ from typing import Literal
 
 import numpy as np
 
+from .utils import validate_solution_coordinates
+
 
 def analytical_convection_solution(
     x: np.ndarray,
@@ -164,6 +166,13 @@ def generate_convection_sample_analytical(
         t = np.linspace(t_domain[0], t_domain[1], target_nt)
         # Compute analytical solution directly at target resolution
         u = analytical_convection_solution(x, t, beta)
+
+    validate_solution_coordinates(
+        u,
+        coords={"t": t, "x": x},
+        axis_map={"t": 0, "x": 1},
+        context="Convection output",
+    )
 
     # Verify solution using analytical derivatives (avoids numerical derivative errors)
     if verify:

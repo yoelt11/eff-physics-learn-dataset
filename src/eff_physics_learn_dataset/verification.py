@@ -101,8 +101,8 @@ def verify_solution_allen_cahn(solution: np.ndarray, x_coords: np.ndarray,
     bc_right = u[:, -1]
     bc_loss = float(np.mean(bc_left**2) + np.mean(bc_right**2))
 
-    # IC: u(x, t=0) = x^2 * cos(π*x)
-    ic_expected = x_coords**2 * np.cos(np.pi * x_coords)
+    # IC: u(x, t=0) = (1 - x^2) * cos(π*x)
+    ic_expected = (1.0 - x_coords**2) * np.cos(np.pi * x_coords)
     ic_actual = u[0, :]
     ic_loss = float(np.mean((ic_actual - ic_expected)**2))
 

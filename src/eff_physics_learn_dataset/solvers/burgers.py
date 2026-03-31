@@ -12,7 +12,12 @@ from scipy.integrate import solve_ivp
 
 from ..verification import verify_solution_burgers
 
-from .utils import create_1d_grid, downsample_solution, downsample_solution_jax
+from .utils import (
+    create_1d_grid,
+    downsample_solution,
+    downsample_solution_jax,
+    validate_solution_coordinates,
+)
 
 
 def initial_condition_burgers(x: np.ndarray, A: float, k: int) -> np.ndarray:
@@ -228,6 +233,13 @@ def generate_burgers_sample(
     # Create target grids for verification
     x = create_1d_grid(x_domain, target_nx)
     t = create_1d_grid(t_domain, target_nt)
+
+    validate_solution_coordinates(
+        u,
+        coords={"t": t, "x": x},
+        axis_map={"t": 0, "x": 1},
+        context="Burgers output",
+    )
 
     # Verify solution
     if verify:

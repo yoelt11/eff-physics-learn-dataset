@@ -235,6 +235,10 @@ class PDEDataset:
 
         idx = np.asarray(view.indices, dtype=np.int64)
         sol = self.u[idx]
+        # Standard xt pickles: u (n_x, n_t) with meshgrid(..., indexing='ij'). imshow maps
+        # rows -> vertical, cols -> horizontal; use u.T per panel so horizontal=x, vertical=t.
+        if "X_grid" in self.grids and "T_grid" in self.grids:
+            sol = np.transpose(sol, (0, 2, 1))
         pmat = self.params[idx]
         pdicts = [
             {k: float(v) for k, v in zip(self.param_names, row)}  # small & readable titles
@@ -365,7 +369,10 @@ class PDEDataset:
         gidx_by = {}
         for name, ds in splits.items():
             idx = np.asarray(ds.indices, dtype=np.int64)
-            solutions_by[name] = self.u[idx]
+            chunk = self.u[idx]
+            if "X_grid" in self.grids and "T_grid" in self.grids:
+                chunk = np.transpose(chunk, (0, 2, 1))
+            solutions_by[name] = chunk
             pmat = self.params[idx]
             params_by[name] = [
                 {k: float(v) for k, v in zip(self.param_names, row)} for row in pmat

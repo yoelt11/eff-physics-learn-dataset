@@ -652,6 +652,12 @@ def plot_solution_rows(
     Each split array can be:
     - (N,H,W)
     - (N,S,H,W) (will be sliced to 2D like `plot_solution_grid`)
+
+    For space–time fields stored as u[x, t] with shape (n_x, n_t), pass ``field`` with
+    shape (n_t, n_x) (transpose) so that ``imshow`` rows correspond to time and columns
+    to x. Then ``extent=(x_min, x_max, t_min, t_max)`` matches axis labels (horizontal x,
+    vertical t). :meth:`PDEDataset.plot_split_solution_rows` applies this transpose when
+    ``X_grid`` and ``T_grid`` are present.
     """
 
     import matplotlib.pyplot as plt

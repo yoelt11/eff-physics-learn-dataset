@@ -190,19 +190,19 @@ def allen_cahn_loss(X: jnp.ndarray, params: dict, model: Any,
     t_coords = X[:, 1].reshape(n_x, n_t)  # t coordinates
 
     # Boundary conditions: u = -1 at spatial boundaries (x = x_min and x = x_max)
-    # NOTE: With meshgrid(x, t), u_reshaped[i, j] corresponds to (x[j], t[i])
+    # Standard layout: u_reshaped[i, j] corresponds to (x[i], t[j]).
     def boundary_condition(x_vals):
         return jnp.ones_like(x_vals) * -1.0
 
     # Extract spatial boundary conditions (fixed x, varying t)
-    # Left spatial boundary: x = x_min (first column - minimum x index)
-    u_left_bc_pred = u_reshaped[:, 0]      # u(x_min, all t)
-    x_left_bc = x_coords[:, 0]             # x_min values (should be constant)
+    # Left spatial boundary: x = x_min (first row - minimum x index)
+    u_left_bc_pred = u_reshaped[0, :]      # u(x_min, all t)
+    x_left_bc = x_coords[0, :]             # x_min values (should be constant)
     u_left_bc_gt = boundary_condition(x_left_bc)
 
-    # Right spatial boundary: x = x_max (last column - maximum x index)
-    u_right_bc_pred = u_reshaped[:, -1]    # u(x_max, all t)
-    x_right_bc = x_coords[:, -1]           # x_max values (should be constant)
+    # Right spatial boundary: x = x_max (last row - maximum x index)
+    u_right_bc_pred = u_reshaped[-1, :]    # u(x_max, all t)
+    x_right_bc = x_coords[-1, :]           # x_max values (should be constant)
     u_right_bc_gt = boundary_condition(x_right_bc)
 
     # Combine boundary losses
@@ -214,9 +214,9 @@ def allen_cahn_loss(X: jnp.ndarray, params: dict, model: Any,
         return x_vals**2 * jnp.cos(jnp.pi * x_vals)
 
     # Extract initial condition (fixed t = t_min, varying x)
-    # Initial condition: t = t_min (first row - minimum t index)
-    u_ic_pred = u_reshaped[0, :]           # u(all x, t_min)
-    x_ic = x_coords[0, :]                  # x values at t_min
+    # Initial condition: t = t_min (first column - minimum t index)
+    u_ic_pred = u_reshaped[:, 0]           # u(all x, t_min)
+    x_ic = x_coords[:, 0]                  # x values at t_min
     u_ic_gt = initial_condition(x_ic)
 
     ic_loss = jnp.mean((u_ic_pred - u_ic_gt)**2)
@@ -308,12 +308,12 @@ def burgers_loss(X: jnp.ndarray, params: dict, model: Any,
     t_coords = X[:, 1].reshape(n_x, n_t)  # t coordinates
 
     # Periodic boundary conditions: u(x_min, t) = u(x_max, t) for all t
-    # NOTE: With meshgrid(x, t), u_reshaped[i, j] corresponds to (x[j], t[i])
-    # Left boundary: x = x_min = -1 (first column - minimum x index)
-    u_left_bc_pred = u_reshaped[:, 0]      # u(x_min, all t)
+    # Standard layout: u_reshaped[i, j] corresponds to (x[i], t[j]).
+    # Left boundary: x = x_min = -1 (first row - minimum x index)
+    u_left_bc_pred = u_reshaped[0, :]      # u(x_min, all t)
 
-    # Right boundary: x = x_max = 1 (last column - maximum x index)
-    u_right_bc_pred = u_reshaped[:, -1]    # u(x_max, all t)
+    # Right boundary: x = x_max = 1 (last row - maximum x index)
+    u_right_bc_pred = u_reshaped[-1, :]    # u(x_max, all t)
 
     # Periodic boundary condition: u(-1, t) = u(1, t)
     bc_loss = jnp.mean((u_left_bc_pred - u_right_bc_pred)**2)
@@ -323,9 +323,9 @@ def burgers_loss(X: jnp.ndarray, params: dict, model: Any,
         return A * jnp.sin(k * jnp.pi * x_vals)
 
     # Extract initial condition (fixed t = t_min = 0, varying x)
-    # Initial condition: t = t_min (first row - minimum t index)
-    u_ic_pred = u_reshaped[0, :]           # u(all x, t_min)
-    x_ic = x_coords[0, :]                  # x values at t_min
+    # Initial condition: t = t_min (first column - minimum t index)
+    u_ic_pred = u_reshaped[:, 0]           # u(all x, t_min)
+    x_ic = x_coords[:, 0]                  # x values at t_min
     u_ic_gt = initial_condition(x_ic)
 
     ic_loss = jnp.mean((u_ic_pred - u_ic_gt)**2)
@@ -412,12 +412,12 @@ def convection_loss(X: jnp.ndarray, params: dict, model: Any,
     t_coords = X[:, 1].reshape(n_x, n_t)  # t coordinates
 
     # Periodic boundary conditions: u(x=0,t) = u(x=L,t) for all t
-    # NOTE: With meshgrid(x, t), u_reshaped[i, j] corresponds to (x[j], t[i])
-    # Left boundary: x = x_min = 0 (first column - minimum x index)
-    u_left_bc_pred = u_reshaped[:, 0]      # u(x_min, all t)
+    # Standard layout: u_reshaped[i, j] corresponds to (x[i], t[j]).
+    # Left boundary: x = x_min = 0 (first row - minimum x index)
+    u_left_bc_pred = u_reshaped[0, :]      # u(x_min, all t)
 
-    # Right boundary: x = x_max = L (last column - maximum x index)
-    u_right_bc_pred = u_reshaped[:, -1]    # u(x_max, all t)
+    # Right boundary: x = x_max = L (last row - maximum x index)
+    u_right_bc_pred = u_reshaped[-1, :]    # u(x_max, all t)
 
     # Periodic boundary condition: u(0, t) = u(L, t)
     bc_loss = jnp.mean((u_left_bc_pred - u_right_bc_pred)**2)
@@ -433,9 +433,9 @@ def convection_loss(X: jnp.ndarray, params: dict, model: Any,
         return 1.0 + jnp.sin(2 * jnp.pi * x_vals / L)
 
     # Extract initial condition (fixed t = t_min, varying x)
-    # Initial condition: t = t_min (first row - minimum t index)
-    u_ic_pred = u_reshaped[0, :]           # u(all x, t_min)
-    x_ic = x_coords[0, :]                  # x values at t_min
+    # Initial condition: t = t_min (first column - minimum t index)
+    u_ic_pred = u_reshaped[:, 0]           # u(all x, t_min)
+    x_ic = x_coords[:, 0]                  # x values at t_min
     u_ic_gt = initial_condition(x_ic)
 
     ic_loss = jnp.mean((u_ic_pred - u_ic_gt)**2)
@@ -523,45 +523,41 @@ def helmholtz_2d_loss(X: jnp.ndarray, params: dict, model: Any,
     
     n_x, n_y = grid_shape
 
-    # CRITICAL FIX: X was created by flatten() on (n_y, n_x) grids, so we must reshape to (n_y, n_x)
-    # even though grid_shape is labeled as (n_x, n_y). This is because train_step.py swaps the
-    # dimensions when passing: grid_shape = (X_grid.shape[1], X_grid.shape[0])
-    # So n_x = X_grid.shape[1] (num columns = x-points) and n_y = X_grid.shape[0] (num rows = y-points)
-    # When we flatten X_grid with shape (n_y, n_x), we get (n_y*n_x,) in row-major order.
-    # To reshape back, we need reshape(n_y, n_x), which is reshape(grid_shape[1], grid_shape[0])
-    u_reshaped = u.reshape(n_y, n_x)  # Swap dimensions to match flattening order
+    # For datasets built with meshgrid(..., indexing='ij'), flattening preserves (n_x, n_y).
+    # So reshape back to (n_x, n_y) to keep u_reshaped[i, j] = u(x[i], y[j]).
+    u_reshaped = u.reshape(n_x, n_y)
 
     # Reshape coordinates to match solution grid
-    x_coords = X[:, 0].reshape(n_y, n_x)  # x coordinates
-    y_coords = X[:, 1].reshape(n_y, n_x)  # y coordinates
+    x_coords = X[:, 0].reshape(n_x, n_y)  # x coordinates
+    y_coords = X[:, 1].reshape(n_x, n_y)  # y coordinates
 
     # Dirichlet boundary conditions: u = analytical values on all boundaries of [-1,1] × [-1,1]
     # Exact solution: u(x,y) = sin(a₁πx) sin(a₂πy)
-    # Grid structure: u_reshaped[i, j] where i is y-index (row), j is x-index (column)
-    # so u_reshaped[i, j] = u(x[j], y[i])
+    # Grid structure: u_reshaped[i, j] where i is x-index, j is y-index
+    # so u_reshaped[i, j] = u(x[i], y[j])
 
-    # Bottom boundary: y = y_min (first row - minimum y index)
-    u_bottom_bc_pred = u_reshaped[0, :]    # u(all x, y_min)
-    x_bottom_bc = x_coords[0, :]           # x values at bottom boundary
-    y_bottom_bc = y_coords[0, :]           # y values at bottom boundary (should all be y_min)
+    # Bottom boundary: y = y_min (first column - minimum y index)
+    u_bottom_bc_pred = u_reshaped[:, 0]    # u(all x, y_min)
+    x_bottom_bc = x_coords[:, 0]           # x values at bottom boundary
+    y_bottom_bc = y_coords[:, 0]           # y values at bottom boundary (should all be y_min)
     u_bottom_bc_gt = jnp.sin(a1 * jnp.pi * x_bottom_bc) * jnp.sin(a2 * jnp.pi * y_bottom_bc)
 
-    # Top boundary: y = y_max (last row - maximum y index)
-    u_top_bc_pred = u_reshaped[-1, :]      # u(all x, y_max)
-    x_top_bc = x_coords[-1, :]             # x values at top boundary
-    y_top_bc = y_coords[-1, :]             # y values at top boundary (should all be y_max)
+    # Top boundary: y = y_max (last column - maximum y index)
+    u_top_bc_pred = u_reshaped[:, -1]      # u(all x, y_max)
+    x_top_bc = x_coords[:, -1]             # x values at top boundary
+    y_top_bc = y_coords[:, -1]             # y values at top boundary (should all be y_max)
     u_top_bc_gt = jnp.sin(a1 * jnp.pi * x_top_bc) * jnp.sin(a2 * jnp.pi * y_top_bc)
 
-    # Left boundary: x = x_min (first column - minimum x index)
-    u_left_bc_pred = u_reshaped[:, 0]      # u(x_min, all y)
-    x_left_bc = x_coords[:, 0]             # x values at left boundary (should all be x_min)
-    y_left_bc = y_coords[:, 0]             # y values at left boundary
+    # Left boundary: x = x_min (first row - minimum x index)
+    u_left_bc_pred = u_reshaped[0, :]      # u(x_min, all y)
+    x_left_bc = x_coords[0, :]             # x values at left boundary (should all be x_min)
+    y_left_bc = y_coords[0, :]             # y values at left boundary
     u_left_bc_gt = jnp.sin(a1 * jnp.pi * x_left_bc) * jnp.sin(a2 * jnp.pi * y_left_bc)
 
-    # Right boundary: x = x_max (last column - maximum x index)
-    u_right_bc_pred = u_reshaped[:, -1]    # u(x_max, all y)
-    x_right_bc = x_coords[:, -1]           # x values at right boundary (should all be x_max)
-    y_right_bc = y_coords[:, -1]           # y values at right boundary
+    # Right boundary: x = x_max (last row - maximum x index)
+    u_right_bc_pred = u_reshaped[-1, :]    # u(x_max, all y)
+    x_right_bc = x_coords[-1, :]           # x values at right boundary (should all be x_max)
+    y_right_bc = y_coords[-1, :]           # y values at right boundary
     u_right_bc_gt = jnp.sin(a1 * jnp.pi * x_right_bc) * jnp.sin(a2 * jnp.pi * y_right_bc)
 
     # Combine boundary losses

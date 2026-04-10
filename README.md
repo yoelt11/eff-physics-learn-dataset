@@ -2,11 +2,11 @@
 
 ![Dataset overview](docs/_assets/dataset_overview_simple.png)
 
-A JAX-based dataset utilities package for PDE (Partial Differential Equations) learning research.
+A lightweight dataset utilities package for PDE (Partial Differential Equations) learning research.
 
 ## Overview
 
-This repository provides tools and utilities for downloading, processing, and working with physics-informed machine learning datasets. It is designed to work seamlessly with JAX and Hugging Face's datasets library.
+This repository provides tools and utilities for downloading, processing, and working with physics-informed machine learning datasets. It is designed to be lightweight and have minimal runtime dependencies.
 
 ## What’s included
 
@@ -15,6 +15,9 @@ This repository provides tools and utilities for downloading, processing, and wo
   - **seeded training budgets** (e.g. 25/50/75 or any `n_train`)
   - **parametric interpolation vs extrapolation** splits for few-shot training
 - **Plot smoke tests** (e.g. a 25-sample grid from the fixed test split)
+- Lightweight **PDE solvers** under `src/solvers/` (optional ground-truth generation), with an optional `backend="jax"` for JIT-friendly generation
+- Lightweight **verification** utilities in `src/verification.py` (NumPy-based checks for PDE residual + BC/IC sanity)
+- JAX-based **PINN loss functions** in `src/pinn_losses.py` for the included PDEs
 
 ## Available Datasets
 
@@ -45,7 +48,21 @@ cd eff-physics-learn-dataset
 uv sync
 ```
 
+If you want to import `eff_physics_learn_dataset` from *outside* the repo (recommended), install it in editable mode:
+
+```bash
+uv pip install -e .
+```
+
 ## Usage
+
+### Coordinate Convention
+
+The repository uses a consistent axis convention for generated solutions and grids:
+
+- 1D + time PDEs (`allen_cahn`, `burgers`, `convection`, `ks`): `u.shape == (n_x, n_t)` with `meshgrid(x, t, indexing='ij')`
+- 2D spatial PDEs (`helmholtz2D`): `u.shape == (n_x, n_y)` with `meshgrid(x, y, indexing='ij')`
+- Time-dependent 2D fields like `wave2d1` keep explicit time-first tensors: `u.shape == (n_t, n_x, n_y)`
 
 ### Downloading Datasets
 
@@ -66,9 +83,44 @@ Download a specific dataset:
 uv run python scripts/download_datasets.py -d helmholtz2D
 ```
 
-Download to a custom directory:
-```bash
-uv run python scripts/download_datasets.py -o /path/to/datasets -d burgers
+### Loading datasets (library API)
+
+The main entrypoint is the lightweight “HF-like” dataset wrapper.
+
+```python
+from eff_physics_learn_dataset import load_pde_dataset
+
+# Default: looks under ./datasets/{equation}/ground_truth/
+ds = load_pde_dataset("helmholtz2D")
+print(len(ds), ds.param_names, ds.u.shape)
+
+sample = ds[0]
+print(sample["u"].shape, sample["param_dict"])
+```
+
+Load from a custom datasets directory (e.g. if you downloaded to `/path/to/datasets`):
+
+```python
+from eff_physics_learn_dataset import load_pde_dataset
+
+ds = load_pde_dataset("burgers", data_dir="/path/to/datasets")
+```
+
+### Train/test and parametric splits
+
+Standard modality: **seeded budgets + fixed test split** (`test_indices.pkl`):
+
+```python
+splits = ds.budget_split("low", seed=0)  # low=25, medium=50, high=75 (or pass an int)
+train, test = splits["train"], splits["test"]
+print(len(train), len(test))
+```
+
+Parametric modality: **few-shot + interpolation vs extrapolation**:
+
+```python
+ps = ds.parametric_splits(seed=0, n_train=10)
+print(len(ps["train_few"]), len(ps["interp"]), len(ps["extrap"]))
 ```
 
 ### Using the Shell Script
@@ -86,31 +138,77 @@ chmod +x scripts/download_datasets.sh
 
 See `docs/dataset_api.md` for full examples.
 
-Load a dataset:
+### Using the solvers (optional: ground-truth generation)
+
+This repo also includes lightweight solver modules under `src/solvers/` that can be used to generate single PDE solutions (useful for debugging, demos, or for building your own dataset generator).
+
+Examples:
 
 ```python
-from eff_physics_learn_dataset.datasets import load_pde_dataset
+from solvers.ks import generate_ks_sample
 
-ds = load_pde_dataset("helmholtz2D")  # e.g. "burgers", "flow_mixing", "helmholtz3D"
-print(len(ds), ds.param_names, ds.u.shape)
-sample = ds[0]
-print(sample["u"].shape, sample["param_dict"])
+u, x, t, ok, metrics = generate_ks_sample(
+    alpha=1.10,
+    beta=1.20,
+    gamma=1.20,
+    solver_nx=256,
+    solver_nt=601,
+    target_nx=64,
+    target_nt=64,
+)
+print(u.shape, ok, metrics)
 ```
-
-Standard modality: **seeded budgets + fixed test split** (`test_indices.pkl`):
 
 ```python
-splits = ds.budget_split("low", seed=0)  # low=25, medium=50, high=75
-train, test = splits["train"], splits["test"]
-print(len(train), len(test))
+from solvers.wave2d1 import generate_wave2d1_sample
+
+u, x, y, t, ok, metrics = generate_wave2d1_sample(
+    c0=1.0,
+    velocity_type="constant",
+    solver_nx=160,
+    solver_ny=160,
+    t_steps=220,
+    target_nx=64,
+    target_ny=64,
+    target_nt=64,
+)
+print(u.shape, ok, metrics)
 ```
 
-Parametric modality: **few-shot + interpolation vs extrapolation** (convex hull in parameter space):
+Quick visualization examples:
 
 ```python
-ps = ds.parametric_splits(seed=0, n_train=10)
-print(len(ps["train_few"]), len(ps["interp"]), len(ps["extrap"]))
+# Wave2D: show a few time slices (u has shape (T, X, Y))
+import matplotlib.pyplot as plt
+import numpy as np
+
+from solvers.wave2d1 import generate_wave2d1_sample
+from plotting import plot_solution_rows
+
+u, x, y, t, ok, metrics = generate_wave2d1_sample()
+
+num_cols = 3
+slice_indices = np.linspace(0, u.shape[0] - 1, num_cols, dtype=int)
+sol = u[slice_indices]  # (3, X, Y)
+
+plot_solution_rows(
+    solutions_by_split={"wave2d": sol},
+    n_per_row=num_cols,
+    plot_style="contourf",
+    contour_levels=20,
+    contour_line_color="black",
+    extent=(x.min(), x.max(), y.min(), y.max()),
+    show_axes=True,
+    colorbar_uniform=True,
+    title="2D wave: three time slices",
+)
+plt.show()
 ```
+
+For runnable notebook examples, see:
+- `scripts/examples/solver_burgers_example.ipynb`
+- `scripts/examples/solver_wave_example.ipynb`
+- `scripts/examples/solver_ks_example.ipynb`
 
 ### Plot smoke tests
 
@@ -138,12 +236,11 @@ uv run python scripts/plot_dataset_samples.py -e helmholtz3D -s test --n 25 --sl
 
 ## Dependencies
 
-- **JAX/JAXLib**: High-performance numerical computing
-- **Hugging Face Datasets**: Dataset loading and processing
-- **gdown**: Google Drive file downloads
 - **NumPy/SciPy**: Numerical operations
-- **h5py**: HDF5 file support
+- **gdown**: Google Drive file downloads
 - **matplotlib**: Plot smoke tests
+- **tomli / tomli-w**: TOML configuration I/O
+- **JAX/JAXLib + h5py** (optional, via `generation` extra): dataset generation solvers
 
 ## Project Structure
 
@@ -157,11 +254,19 @@ eff-physics-learn-dataset/
 │   └── dataset_api.md            # HF-like dataset API guide
 ├── scripts/
 │   ├── download_datasets.py      # Python download script
-│   └── download_datasets.sh      # Shell wrapper
-│   └── plot_dataset_samples.py   # Plot a 25-sample grid (smoke test)
+│   ├── download_datasets.sh      # Shell wrapper
+│   ├── plot_dataset_samples.py   # Plot a 25-sample grid (smoke test)
+│   ├── plot_param_splits.py      # Plot param-space distributions
+│   └── solution_similarity_report.py  # Solution-space diagnostics
 ├── src/
-│   └── eff_physics_learn_dataset/
-│       └── datasets/             # HF-like dataset API
+│   ├── eff_physics_learn_dataset.py  # Public API shim (importable module)
+│   ├── dataset.py                # PDEDataset + load_pde_dataset
+│   ├── download.py               # Dataset downloading
+│   ├── plotting.py               # Plot utilities
+│   ├── similarity.py             # Solution-space PCA/similarity helpers
+│   ├── splitting.py              # Parametric splitting helpers
+│   ├── verification.py           # PDE-specific verification utilities
+│   └── solvers/                  # Lightweight solver modules (optional)
 ├── pyproject.toml               # Project configuration
 └── README.md
 ```
@@ -172,6 +277,16 @@ eff-physics-learn-dataset/
 @article{torresamortized,
   title={Amortized Physics-Informed Learning via Generative Initialization of Radial Basis Functions},
   author={Torres, Edgar and Niepert, Mathias}
+}
+
+@misc{torres2025adaptivephysicsinformedneuralnetworks,
+      title={Adaptive Physics-informed Neural Networks: A Survey}, 
+      author={Edgar Torres and Jonathan Schiefer and Mathias Niepert},
+      year={2025},
+      eprint={2503.18181},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2503.18181}, 
 }
 ```
 

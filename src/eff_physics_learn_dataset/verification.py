@@ -27,21 +27,21 @@ from typing import Dict, Tuple
 import numpy as np
 
 
-def compute_derivatives_transposed(u: np.ndarray, x_coords: np.ndarray,
-                                   t_coords: np.ndarray) -> Dict[str, np.ndarray]:
-    """Compute numerical derivatives for transposed indexing: u[i,j] = u(x[j], t[i]).
+def compute_derivatives_xt_standard(u: np.ndarray, x_coords: np.ndarray,
+                                    t_coords: np.ndarray) -> Dict[str, np.ndarray]:
+    """Compute numerical derivatives for standard xt indexing: u[i,j] = u(x[i], t[j]).
 
     Args:
-        u: Solution array of shape (n_t, n_x) where u[i, j] = u(x[j], t[i])
+        u: Solution array of shape (n_x, n_t) where u[i, j] = u(x[i], t[j])
         x_coords: 1D spatial coordinate array
         t_coords: 1D temporal coordinate array
 
     Returns:
         Dictionary with u, u_t, u_x, u_xx
     """
-    u_t = np.gradient(u, t_coords, axis=0)  # t varies along axis 0
-    u_x = np.gradient(u, x_coords, axis=1)  # x varies along axis 1
-    u_xx = np.gradient(u_x, x_coords, axis=1)
+    u_t = np.gradient(u, t_coords, axis=1)  # t varies along axis 1
+    u_x = np.gradient(u, x_coords, axis=0)  # x varies along axis 0
+    u_xx = np.gradient(u_x, x_coords, axis=0)
 
     return {'u': u, 'u_t': u_t, 'u_x': u_x, 'u_xx': u_xx}
 
@@ -74,7 +74,7 @@ def verify_solution_allen_cahn(solution: np.ndarray, x_coords: np.ndarray,
     """Verify Allen-Cahn solution satisfies PDE/BC/IC constraints.
 
     Args:
-        solution: Solution array (n_t, n_x) with transposed indexing
+        solution: Solution array (n_x, n_t) with standard indexing
         x_coords: 1D spatial coordinates
         t_coords: 1D temporal coordinates
         eps: Diffusion coefficient
@@ -87,7 +87,7 @@ def verify_solution_allen_cahn(solution: np.ndarray, x_coords: np.ndarray,
         (is_valid, metrics) where metrics contains loss values
     """
     # Compute derivatives
-    derivs = compute_derivatives_transposed(solution, x_coords, t_coords)
+    derivs = compute_derivatives_xt_standard(solution, x_coords, t_coords)
     u = derivs['u']
     u_t = derivs['u_t']
     u_xx = derivs['u_xx']
@@ -97,13 +97,13 @@ def verify_solution_allen_cahn(solution: np.ndarray, x_coords: np.ndarray,
     pde_loss = float(np.mean(pde_residual**2))
 
     # BC: u = 0 at x = x_min and x_max (homogeneous Dirichlet)
-    bc_left = u[:, 0]
-    bc_right = u[:, -1]
+    bc_left = u[0, :]
+    bc_right = u[-1, :]
     bc_loss = float(np.mean(bc_left**2) + np.mean(bc_right**2))
 
     # IC: u(x, t=0) = (1 - x^2) * cos(π*x)
     ic_expected = (1.0 - x_coords**2) * np.cos(np.pi * x_coords)
-    ic_actual = u[0, :]
+    ic_actual = u[:, 0]
     ic_loss = float(np.mean((ic_actual - ic_expected)**2))
 
     # Check validity
@@ -132,7 +132,7 @@ def verify_solution_burgers(solution: np.ndarray, x_coords: np.ndarray,
     """Verify Burgers solution satisfies PDE/BC/IC constraints.
 
     Args:
-        solution: Solution array (n_t, n_x) with transposed indexing
+        solution: Solution array (n_x, n_t) with standard indexing
         x_coords: 1D spatial coordinates
         t_coords: 1D temporal coordinates
         nu: Viscosity coefficient
@@ -145,7 +145,7 @@ def verify_solution_burgers(solution: np.ndarray, x_coords: np.ndarray,
     Returns:
         (is_valid, metrics) where metrics contains loss values
     """
-    derivs = compute_derivatives_transposed(solution, x_coords, t_coords)
+    derivs = compute_derivatives_xt_standard(solution, x_coords, t_coords)
     u = derivs['u']
     u_t = derivs['u_t']
     u_x = derivs['u_x']
@@ -156,13 +156,13 @@ def verify_solution_burgers(solution: np.ndarray, x_coords: np.ndarray,
     pde_loss = float(np.mean(pde_residual**2))
 
     # BC: Periodic - u(x_min, t) = u(x_max, t)
-    bc_left = u[:, 0]
-    bc_right = u[:, -1]
+    bc_left = u[0, :]
+    bc_right = u[-1, :]
     bc_loss = float(np.mean((bc_left - bc_right)**2))
 
     # IC: u(x, t=0) = A sin(kπx)
     ic_expected = A * np.sin(k * np.pi * x_coords)
-    ic_actual = u[0, :]
+    ic_actual = u[:, 0]
     ic_loss = float(np.mean((ic_actual - ic_expected)**2))
 
     pde_ok = pde_loss < pde_threshold
@@ -190,7 +190,7 @@ def verify_solution_convection(solution: np.ndarray, x_coords: np.ndarray,
     """Verify Convection solution satisfies PDE/BC/IC constraints.
 
     Args:
-        solution: Solution array (n_t, n_x) with transposed indexing
+        solution: Solution array (n_x, n_t) with standard indexing
         x_coords: 1D spatial coordinates
         t_coords: 1D temporal coordinates
         beta: Convection velocity
@@ -201,7 +201,7 @@ def verify_solution_convection(solution: np.ndarray, x_coords: np.ndarray,
     Returns:
         (is_valid, metrics) where metrics contains loss values
     """
-    derivs = compute_derivatives_transposed(solution, x_coords, t_coords)
+    derivs = compute_derivatives_xt_standard(solution, x_coords, t_coords)
     u = derivs['u']
     u_t = derivs['u_t']
     u_x = derivs['u_x']
@@ -211,14 +211,14 @@ def verify_solution_convection(solution: np.ndarray, x_coords: np.ndarray,
     pde_loss = float(np.mean(pde_residual**2))
 
     # BC: Periodic - u(x=0, t) = u(x=L, t)
-    bc_left = u[:, 0]
-    bc_right = u[:, -1]
+    bc_left = u[0, :]
+    bc_right = u[-1, :]
     bc_loss = float(np.mean((bc_left - bc_right)**2))
 
     # IC: u(x, t=0) = 1 + sin(2πx/L)
     L = x_coords[-1] - x_coords[0]
     ic_expected = 1.0 + np.sin(2 * np.pi * x_coords / L)
-    ic_actual = u[0, :]
+    ic_actual = u[:, 0]
     ic_loss = float(np.mean((ic_actual - ic_expected)**2))
 
     pde_ok = pde_loss < pde_threshold
@@ -315,7 +315,7 @@ def verify_solution_ks(solution: np.ndarray, x_coords: np.ndarray,
     """Verify 1D Kuramoto-Sivashinsky solution satisfies PDE/BC/IC constraints.
 
     Args:
-        solution: Solution array (n_t, n_x) with transposed indexing
+        solution: Solution array (n_x, n_t) with standard indexing
         x_coords: 1D spatial coordinates
         t_coords: 1D temporal coordinates
         alpha: Nonlinear coefficient
@@ -329,27 +329,27 @@ def verify_solution_ks(solution: np.ndarray, x_coords: np.ndarray,
     Returns:
         (is_valid, metrics) where metrics contains loss values
     """
-    derivs = compute_derivatives_transposed(solution, x_coords, t_coords)
+    derivs = compute_derivatives_xt_standard(solution, x_coords, t_coords)
     u = derivs['u']
     u_t = derivs['u_t']
     u_x = derivs['u_x']
     u_xx = derivs['u_xx']
 
     # Fourth derivative via repeated differentiation along x.
-    u_xxx = np.gradient(u_xx, x_coords, axis=1)
-    u_xxxx = np.gradient(u_xxx, x_coords, axis=1)
+    u_xxx = np.gradient(u_xx, x_coords, axis=0)
+    u_xxxx = np.gradient(u_xxx, x_coords, axis=0)
 
     # PDE residual: u_t + alpha * u * u_x + beta * u_xx + gamma * u_xxxx = 0
     pde_residual = u_t + alpha * u * u_x + beta * u_xx + gamma * u_xxxx
     pde_loss = float(np.mean(pde_residual**2))
 
     # BC: Periodic - enforce closure between first and last x samples.
-    bc_left = u[:, 0]
-    bc_right = u[:, -1]
+    bc_left = u[0, :]
+    bc_right = u[-1, :]
     bc_loss = float(np.mean((bc_left - bc_right)**2))
 
     # IC: match generated initial condition.
-    ic_actual = u[0, :]
+    ic_actual = u[:, 0]
     ic_loss = float(np.mean((ic_actual - expected_u0)**2))
 
     pde_ok = pde_loss < pde_threshold

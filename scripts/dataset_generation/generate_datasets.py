@@ -213,7 +213,7 @@ def generate_equation_dataset(
         }
     else:
         X_grid, T_grid = np.meshgrid(x, t, indexing='ij')
-        grids = {"X_grid": X_grid.T, "T_grid": T_grid.T}  # Transposed for compatibility
+        grids = {"X_grid": X_grid, "T_grid": T_grid}
         grid_info = {
             "x_domain": domain_config["x_domain"],
             "t_domain": domain_config["t_domain"],

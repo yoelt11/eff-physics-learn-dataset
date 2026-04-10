@@ -76,7 +76,7 @@ def solve_burgers(
         k: Integer IC wavenumber (Fourier mode)
 
     Returns:
-        Solution u with shape (n_t, n_x) - transposed indexing!
+        Solution u with shape (n_x, n_t) - standard indexing: u[i, j] = u(x[i], t[j])
     """
     # Enforce periodic consistency for IC on [-1, 1].
     if not np.isclose(k, round(k), atol=1e-12):
@@ -111,8 +111,8 @@ def solve_burgers(
     if not sol.success:
         raise RuntimeError(f"Solver failed: {sol.message}")
 
-    # Reshape to (n_t, n_x) - transposed indexing
-    u = sol.y.T
+    # Keep standard indexing (n_x, n_t) to match meshgrid(..., indexing='ij')
+    u = sol.y
 
     return u
 
@@ -172,8 +172,8 @@ def _solve_burgers_jax(
         return u_next, u_next
 
     _, tail = lax.scan(step, u0j, xs=None, length=len(t) - 1)
-    U = jnp.concatenate([u0j[None, :], tail], axis=0)
-    return np.asarray(jax.device_get(U), dtype=np.float64)
+    U = jnp.concatenate([u0j[None, :], tail], axis=0)  # (n_t, n_x)
+    return np.asarray(jax.device_get(U.T), dtype=np.float64)  # -> (n_x, n_t)
 
 
 def generate_burgers_sample(
@@ -207,7 +207,7 @@ def generate_burgers_sample(
 
     Returns:
         (solution, x_coords, t_coords, is_valid, metrics)
-        solution has shape (target_nt, target_nx) - transposed indexing
+        solution has shape (target_nx, target_nt) - standard indexing
     """
     # Create high-res grids
     x_hires = create_1d_grid(x_domain, solver_nx)
@@ -226,9 +226,12 @@ def generate_burgers_sample(
         import jax
         import jax.numpy as jnp
 
-        u = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nt, target_nx))), dtype=np.float64)
+        u = np.asarray(
+            jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nx, target_nt))),
+            dtype=np.float64,
+        )
     else:
-        u = downsample_solution(u_hires, (target_nt, target_nx))
+        u = downsample_solution(u_hires, (target_nx, target_nt))
 
     # Create target grids for verification
     x = create_1d_grid(x_domain, target_nx)
@@ -237,7 +240,7 @@ def generate_burgers_sample(
     validate_solution_coordinates(
         u,
         coords={"t": t, "x": x},
-        axis_map={"t": 0, "x": 1},
+        axis_map={"x": 0, "t": 1},
         context="Burgers output",
     )
 

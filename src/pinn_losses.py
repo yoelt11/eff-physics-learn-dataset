@@ -53,6 +53,26 @@ def _default_grid_shape_2d(X: jnp.ndarray) -> Tuple[int, int]:
     return (side, side)
 
 
+def _reshape_xt_standard(
+    values: jnp.ndarray,
+    X: jnp.ndarray,
+    grid_shape: Tuple[int, int],
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Reshape flattened fields to standard (n_x, n_t) layout.
+
+    Convention:
+    - X columns are [x, t]
+    - grids are built with meshgrid(x, t, indexing='ij')
+    - flattened in C-order
+    """
+    n_x, n_t = grid_shape
+    return (
+        values.reshape(n_x, n_t),
+        X[:, 0].reshape(n_x, n_t),
+        X[:, 1].reshape(n_x, n_t),
+    )
+
+
 def cdr_loss(
     X: jnp.ndarray,
     params: dict,
@@ -82,19 +102,18 @@ def cdr_loss(
         grid_shape = _default_grid_shape_2d(X)
     n_x, n_t = grid_shape
 
-    u_reshaped = u.reshape(n_x, n_t)
-    x_coords = X[:, 0].reshape(n_x, n_t)
+    u_reshaped, x_coords, _ = _reshape_xt_standard(u, X, grid_shape)
 
-    u_left = u_reshaped[:, 0]
-    u_right = u_reshaped[:, -1]
+    u_left = u_reshaped[0, :]
+    u_right = u_reshaped[-1, :]
     bc_loss = jnp.mean((u_left - u_right) ** 2)
 
     def ic(x_vals: jnp.ndarray) -> jnp.ndarray:
         L = jnp.max(x_vals) - jnp.min(x_vals)
         return jnp.sin(2 * jnp.pi * x_vals / L)
 
-    u_ic_pred = u_reshaped[0, :]
-    x_ic = x_coords[0, :]
+    u_ic_pred = u_reshaped[:, 0]
+    x_ic = x_coords[:, 0]
     ic_loss = jnp.mean((u_ic_pred - ic(x_ic)) ** 2)
 
     zero_shot_bias_loss = 0.0
@@ -151,18 +170,17 @@ def allen_cahn_loss(
         grid_shape = _default_grid_shape_2d(X)
     n_x, n_t = grid_shape
 
-    u_reshaped = u.reshape(n_x, n_t)
-    x_coords = X[:, 0].reshape(n_x, n_t)
+    u_reshaped, x_coords, _ = _reshape_xt_standard(u, X, grid_shape)
 
-    u_left_pred = u_reshaped[:, 0]
-    u_right_pred = u_reshaped[:, -1]
+    u_left_pred = u_reshaped[0, :]
+    u_right_pred = u_reshaped[-1, :]
     bc_loss = jnp.mean(u_left_pred**2) + jnp.mean(u_right_pred**2)
 
     def ic(x_vals: jnp.ndarray) -> jnp.ndarray:
         return x_vals**2 * jnp.cos(jnp.pi * x_vals)
 
-    u_ic_pred = u_reshaped[0, :]
-    x_ic = x_coords[0, :]
+    u_ic_pred = u_reshaped[:, 0]
+    x_ic = x_coords[:, 0]
     ic_loss = jnp.mean((u_ic_pred - ic(x_ic)) ** 2)
 
     zero_shot_bias_loss = 0.0
@@ -220,16 +238,15 @@ def burgers_loss(
         grid_shape = _default_grid_shape_2d(X)
     n_x, n_t = grid_shape
 
-    u_reshaped = u.reshape(n_x, n_t)
-    x_coords = X[:, 0].reshape(n_x, n_t)
+    u_reshaped, x_coords, _ = _reshape_xt_standard(u, X, grid_shape)
 
-    bc_loss = jnp.mean((u_reshaped[:, 0] - u_reshaped[:, -1]) ** 2)
+    bc_loss = jnp.mean((u_reshaped[0, :] - u_reshaped[-1, :]) ** 2)
 
     def ic(x_vals: jnp.ndarray) -> jnp.ndarray:
         return A * jnp.sin(k * jnp.pi * x_vals)
 
-    u_ic_pred = u_reshaped[0, :]
-    x_ic = x_coords[0, :]
+    u_ic_pred = u_reshaped[:, 0]
+    x_ic = x_coords[:, 0]
     ic_loss = jnp.mean((u_ic_pred - ic(x_ic)) ** 2)
 
     zero_shot_bias_loss = 0.0
@@ -284,17 +301,16 @@ def convection_loss(
         grid_shape = _default_grid_shape_2d(X)
     n_x, n_t = grid_shape
 
-    u_reshaped = u.reshape(n_x, n_t)
-    x_coords = X[:, 0].reshape(n_x, n_t)
+    u_reshaped, x_coords, _ = _reshape_xt_standard(u, X, grid_shape)
 
-    bc_loss = jnp.mean((u_reshaped[:, 0] - u_reshaped[:, -1]) ** 2)
+    bc_loss = jnp.mean((u_reshaped[0, :] - u_reshaped[-1, :]) ** 2)
 
     def ic(x_vals: jnp.ndarray) -> jnp.ndarray:
         L = jnp.max(x_vals) - jnp.min(x_vals)
         return 1.0 + jnp.sin(2 * jnp.pi * x_vals / L)
 
-    u_ic_pred = u_reshaped[0, :]
-    x_ic = x_coords[0, :]
+    u_ic_pred = u_reshaped[:, 0]
+    x_ic = x_coords[:, 0]
     ic_loss = jnp.mean((u_ic_pred - ic(x_ic)) ** 2)
 
     zero_shot_bias_loss = 0.0
@@ -423,16 +439,15 @@ def ks_loss(
         grid_shape = _default_grid_shape_2d(X)
     n_x, n_t = grid_shape
 
-    u_reshaped = u.reshape(n_x, n_t)
-    x_coords = X[:, 0].reshape(n_x, n_t)
+    u_reshaped, x_coords, _ = _reshape_xt_standard(u, X, grid_shape)
 
-    bc_loss = jnp.mean((u_reshaped[:, 0] - u_reshaped[:, -1]) ** 2)
+    bc_loss = jnp.mean((u_reshaped[0, :] - u_reshaped[-1, :]) ** 2)
 
     def ic(x_vals: jnp.ndarray) -> jnp.ndarray:
         return jnp.cos(x_vals / 16.0) * (1.0 + jnp.sin(x_vals / 16.0))
 
-    u_ic_pred = u_reshaped[0, :]
-    x_ic = x_coords[0, :]
+    u_ic_pred = u_reshaped[:, 0]
+    x_ic = x_coords[:, 0]
     ic_loss = jnp.mean((u_ic_pred - ic(x_ic)) ** 2)
 
     zero_shot_bias_loss = 0.0

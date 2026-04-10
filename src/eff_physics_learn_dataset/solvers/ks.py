@@ -127,7 +127,7 @@ def solve_ks(
 ) -> np.ndarray:
     """Solve the 1D KS equation on a periodic grid.
 
-    Returns solution with transposed indexing (n_t, n_x).
+    Returns solution with standard indexing (n_x, n_t).
     """
     if t.ndim != 1 or len(t) < 2:
         raise ValueError("t must be a 1D grid with at least 2 points")
@@ -158,7 +158,8 @@ def solve_ks(
         u_hat = E * u_hat + f1 * Nv + 2.0 * f2 * (Na + Nb) + f3 * Nc
         saved.append(np.fft.ifft(u_hat).real.copy())
 
-    return np.asarray(saved, dtype=np.float64)
+    # saved is (n_t, n_x); return standardized (n_x, n_t)
+    return np.asarray(saved, dtype=np.float64).T
 
 
 def _solve_ks_jax(
@@ -205,20 +206,20 @@ def _solve_ks_jax(
     # First frame at t=0
     u0_real = jnp.fft.ifft(u_hat0).real
     _, tail = lax.scan(step, u_hat0, xs=None, length=len(t) - 1)
-    U = jnp.concatenate([u0_real[None, :], tail], axis=0)
-    return np.asarray(jax.device_get(U), dtype=np.float64)
+    U = jnp.concatenate([u0_real[None, :], tail], axis=0)  # (n_t, n_x)
+    return np.asarray(jax.device_get(U.T), dtype=np.float64)  # -> (n_x, n_t)
 
 
 def _downsample_periodic_solution(
     u_hires: np.ndarray,
-    target_nt: int,
     target_nx: int,
+    target_nt: int,
 ) -> np.ndarray:
     """Downsample while preserving periodic closure in x."""
-    # Append the first column so the periodic seam is continuous at x_max.
-    u_closed = np.concatenate([u_hires, u_hires[:, :1]], axis=1)
-    u = downsample_solution(u_closed, (target_nt, target_nx))
-    u[:, -1] = u[:, 0]
+    # Append the first x row so the periodic seam is continuous at x_max.
+    u_closed = np.concatenate([u_hires, u_hires[:1, :]], axis=0)
+    u = downsample_solution(u_closed, (target_nx, target_nt))
+    u[-1, :] = u[0, :]
     return np.asarray(u, dtype=np.float64)
 
 
@@ -242,7 +243,7 @@ def generate_ks_sample(
 
     Returns:
         (solution, x_coords, t_coords, is_valid, metrics)
-        where solution has shape (target_nt, target_nx).
+        where solution has shape (target_nx, target_nt).
     """
     x_hires = create_periodic_grid(x_domain, solver_nx)
     t0, t1 = float(t_domain[0]), float(t_domain[1])
@@ -271,24 +272,23 @@ def generate_ks_sample(
         import jax
         import jax.numpy as jnp
 
-        u_closed = np.concatenate([u_hires, u_hires[:, :1]], axis=1)
-        u_resized = downsample_solution_jax(jnp.asarray(u_closed), (target_nt, target_nx))
+        u_closed = np.concatenate([u_hires, u_hires[:1, :]], axis=0)
+        u_resized = downsample_solution_jax(jnp.asarray(u_closed), (target_nx, target_nt))
         u = np.asarray(jax.device_get(u_resized), dtype=np.float64)
-        u[:, -1] = u[:, 0]
-        u0_closed = np.concatenate([u_hires[:1], u_hires[:1, :1]], axis=1)
-        u0_resized = downsample_solution_jax(jnp.asarray(u0_closed), (1, target_nx))
-        u0_target = np.asarray(jax.device_get(u0_resized), dtype=np.float64)[0]
+        u[-1, :] = u[0, :]
+        u0_resized = downsample_solution_jax(jnp.asarray(u_hires[:, :1]), (target_nx, 1))
+        u0_target = np.asarray(jax.device_get(u0_resized), dtype=np.float64)[:, 0]
         u0_target[-1] = u0_target[0]
     else:
-        u = _downsample_periodic_solution(u_hires, target_nt=target_nt, target_nx=target_nx)
-        u0_target = _downsample_periodic_solution(u_hires[:1], target_nt=1, target_nx=target_nx)[0]
+        u = _downsample_periodic_solution(u_hires, target_nx=target_nx, target_nt=target_nt)
+        u0_target = _downsample_periodic_solution(u_hires[:, :1], target_nx=target_nx, target_nt=1)[:, 0]
     x = np.linspace(x_domain[0], x_domain[1], target_nx, dtype=np.float64)
     t = np.linspace(t_domain[0], t_domain[1], target_nt, dtype=np.float64)
 
     validate_solution_coordinates(
         u,
         coords={"t": t, "x": x},
-        axis_map={"t": 0, "x": 1},
+        axis_map={"x": 0, "t": 1},
         context="KS output",
     )
 

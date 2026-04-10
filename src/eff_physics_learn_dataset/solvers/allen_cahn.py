@@ -74,7 +74,7 @@ def solve_allen_cahn(
         enforce_bc: If True, enforce Dirichlet BC at each time step
 
     Returns:
-        Solution u with shape (n_t, n_x) - transposed indexing!
+        Solution u with shape (n_x, n_t) - standard indexing: u[i, j] = u(x[i], t[j])
     """
     dx = x[1] - x[0]
     n_x = len(x)
@@ -109,13 +109,13 @@ def solve_allen_cahn(
     if not sol.success:
         raise RuntimeError(f"Solver failed: {sol.message}")
 
-    # Reshape to (n_t, n_x) - transposed indexing
-    u = sol.y.T
+    # Keep standard indexing (n_x, n_t) to match meshgrid(..., indexing='ij')
+    u = sol.y
 
-    # Enforce BC at all time steps
+    # Enforce BC at all time steps (x boundaries)
     if enforce_bc:
-        u[:, 0] = 0.0
-        u[:, -1] = 0.0
+        u[0, :] = 0.0
+        u[-1, :] = 0.0
 
     return u
 
@@ -205,7 +205,7 @@ def generate_allen_cahn_sample(
 
     Returns:
         (solution, x_coords, t_coords, is_valid, metrics)
-        solution has shape (target_nt, target_nx) - transposed indexing
+        solution has shape (target_nx, target_nt) - standard indexing
     """
     # Create high-res grids
     x_hires = create_1d_grid(x_domain, solver_nx)
@@ -224,9 +224,12 @@ def generate_allen_cahn_sample(
         import jax
         import jax.numpy as jnp
 
-        u = np.asarray(jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nt, target_nx))), dtype=np.float64)
+        u = np.asarray(
+            jax.device_get(downsample_solution_jax(jnp.asarray(u_hires), (target_nx, target_nt))),
+            dtype=np.float64,
+        )
     else:
-        u = downsample_solution(u_hires, (target_nt, target_nx))
+        u = downsample_solution(u_hires, (target_nx, target_nt))
 
     # Create target grids for verification
     x = create_1d_grid(x_domain, target_nx)
@@ -235,7 +238,7 @@ def generate_allen_cahn_sample(
     validate_solution_coordinates(
         u,
         coords={"t": t, "x": x},
-        axis_map={"t": 0, "x": 1},
+        axis_map={"x": 0, "t": 1},
         context="Allen-Cahn output",
     )
 

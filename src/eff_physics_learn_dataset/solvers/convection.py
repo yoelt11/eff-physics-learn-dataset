@@ -33,20 +33,11 @@ def analytical_convection_solution(
         beta: Convection velocity
 
     Returns:
-        Solution u with shape (nt, nx) - transposed indexing: u[i,j] = u(x[j], t[i])
+        Solution u with shape (nx, nt) - standard indexing: u[i,j] = u(x[i], t[j])
     """
     L = x[-1] - x[0]  # Domain length
-    nt = len(t)
-    nx = len(x)
-
-    # Initialize solution array
-    u = np.zeros((nt, nx))
-
-    # Compute analytical solution at each time step
-    for i, ti in enumerate(t):
-        # Wave travels with velocity beta
-        # u(x,t) = 1 + sin(2π(x - βt)/L)
-        u[i, :] = 1.0 + np.sin(2 * np.pi * (x - beta * ti) / L)
+    X, T = np.meshgrid(x, t, indexing="ij")
+    u = 1.0 + np.sin(2 * np.pi * (X - beta * T) / L)
 
     return u
 
@@ -65,7 +56,7 @@ def verify_analytical_convection(
     This avoids numerical derivative errors that get amplified by large beta values.
 
     Args:
-        u: Solution array (nt, nx) - transposed indexing
+        u: Solution array (nx, nt) - standard indexing
         x: 1D spatial coordinates
         t: 1D temporal coordinates
         beta: Convection velocity
@@ -77,10 +68,10 @@ def verify_analytical_convection(
         (is_valid, metrics) where metrics contains loss values
     """
     L = x[-1] - x[0]
-    nt, nx = u.shape
+    nx, nt = u.shape
 
-    # Create meshgrid for vectorized computation
-    X, T = np.meshgrid(x, t)
+    # Create meshgrid for vectorized computation (standard indexing)
+    X, T = np.meshgrid(x, t, indexing="ij")
 
     # Analytical derivatives:
     # u(x,t) = 1 + sin(2π(x - βt)/L)
@@ -96,13 +87,13 @@ def verify_analytical_convection(
     pde_loss = float(np.mean(pde_residual**2))
 
     # BC: Periodic - u(x=0, t) = u(x=L, t)
-    bc_left = u[:, 0]
-    bc_right = u[:, -1]
+    bc_left = u[0, :]
+    bc_right = u[-1, :]
     bc_loss = float(np.mean((bc_left - bc_right)**2))
 
     # IC: u(x, t=0) = 1 + sin(2πx/L)
     ic_expected = 1.0 + np.sin(2 * np.pi * x / L)
-    ic_actual = u[0, :]
+    ic_actual = u[:, 0]
     ic_loss = float(np.mean((ic_actual - ic_expected)**2))
 
     pde_ok = pde_loss < pde_threshold
@@ -145,7 +136,7 @@ def generate_convection_sample_analytical(
 
     Returns:
         (solution, x_coords, t_coords, is_valid, metrics)
-        solution has shape (target_nt, target_nx) - transposed indexing
+        solution has shape (target_nx, target_nt) - standard indexing
     """
     # Note: No high-res solving needed! Analytical solution is exact at any resolution
     if backend == "jax":
@@ -156,7 +147,7 @@ def generate_convection_sample_analytical(
         tj = jnp.linspace(t_domain[0], t_domain[1], target_nt)
         # Vectorized analytical solution: u(t,x) = 1 + sin(2π(x-βt)/L)
         L = xj[-1] - xj[0]
-        X, T = jnp.meshgrid(xj, tj, indexing="xy")
+        X, T = jnp.meshgrid(xj, tj, indexing="ij")
         u = 1.0 + jnp.sin(2.0 * jnp.pi * (X - beta * T) / L)
         x = np.asarray(jax.device_get(xj))
         t = np.asarray(jax.device_get(tj))
@@ -170,7 +161,7 @@ def generate_convection_sample_analytical(
     validate_solution_coordinates(
         u,
         coords={"t": t, "x": x},
-        axis_map={"t": 0, "x": 1},
+        axis_map={"x": 0, "t": 1},
         context="Convection output",
     )
 

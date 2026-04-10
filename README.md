@@ -56,6 +56,14 @@ uv pip install -e .
 
 ## Usage
 
+### Coordinate Convention
+
+The repository uses a consistent axis convention for generated solutions and grids:
+
+- 1D + time PDEs (`allen_cahn`, `burgers`, `convection`, `ks`): `u.shape == (n_x, n_t)` with `meshgrid(x, t, indexing='ij')`
+- 2D spatial PDEs (`helmholtz2D`): `u.shape == (n_x, n_y)` with `meshgrid(x, y, indexing='ij')`
+- Time-dependent 2D fields like `wave2d1` keep explicit time-first tensors: `u.shape == (n_t, n_x, n_y)`
+
 ### Downloading Datasets
 
 See the concise guide at `docs/download_datasets.md`.

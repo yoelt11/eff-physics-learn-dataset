@@ -146,21 +146,21 @@ def verify_dataset_samples(
             if X_grid is not None:
                 X_grid = np.asarray(X_grid)
                 if X_grid.ndim == 2:
-                    # For meshgrid: X_grid[i, j] = x_coords[j], so extract first row
-                    x_coords = X_grid[0, :]
+                    # For meshgrid(x, t, indexing='ij'): X_grid[i, j] = x_coords[i]
+                    x_coords = X_grid[:, 0]
                 else:
-                    x_coords = np.linspace(-1, 1, solutions.shape[2])
+                    x_coords = np.linspace(-1, 1, solutions.shape[1])
             else:
-                x_coords = np.linspace(-1, 1, solutions.shape[2])
+                x_coords = np.linspace(-1, 1, solutions.shape[1])
             if T_grid is not None:
                 T_grid = np.asarray(T_grid)
                 if T_grid.ndim == 2:
-                    # For meshgrid: T_grid[i, j] = t_coords[i], so extract first column
-                    t_coords = T_grid[:, 0]
+                    # For meshgrid(x, t, indexing='ij'): T_grid[i, j] = t_coords[j]
+                    t_coords = T_grid[0, :]
                 else:
-                    t_coords = np.linspace(0, 1, solutions.shape[1])
+                    t_coords = np.linspace(0, 1, solutions.shape[2])
             else:
-                t_coords = np.linspace(0, 1, solutions.shape[1])
+                t_coords = np.linspace(0, 1, solutions.shape[2])
     
     # Determine which samples to verify
     total_samples = solutions.shape[0]

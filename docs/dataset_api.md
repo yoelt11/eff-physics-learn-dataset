@@ -4,6 +4,8 @@ This repo ships PDE datasets on disk under:
 
 `datasets/{equation}/ground_truth/*`
 
+**Download:** names and Google Drive IDs live in `configs/datasets/dataset_links.toml` (mirrored under the installed package). Use `scripts/download_datasets.py --list` / `-d <name>`. The top-level `load_pde_dataset()` can **auto-download** missing datasets when `auto_download=True` (default) and the name appears in that TOML.
+
 The Python API in `eff_physics_learn_dataset` provides a small HuggingFace-`datasets`-style interface for:
 - **seeded, dynamic training budgets** (not hard-coded)
 - a **fixed test split** via `test_indices.pkl`
@@ -20,12 +22,15 @@ uv sync
 ```python
 from eff_physics_learn_dataset import load_pde_dataset
 
-ds = load_pde_dataset("helmholtz2D")  # also: "burgers", "allen_cahn", ...
-print(len(ds), ds.param_names, ds.u.shape)
+ds = load_pde_dataset("helmholtz2D")  # burgers, allen_cahn, convection, ks, …
+# Same API for volumetric / time stacks, e.g. helmholtz3D (xyz), wave2d1 (txy):
+# ds = load_pde_dataset("helmholtz3D")
+# ds = load_pde_dataset("wave2d1")
+print(len(ds), ds.param_names, ds.u.shape, ds.field_layout.layout_id)
 ```
 
 Each sample is a dict (JAX-friendly arrays):
-- `u`: solution field (e.g. `(64, 64)`)
+- `u`: solution field; **per-sample** shape depends on `field_layout` (e.g. `(64, 64)` for `xy`, `(64,64,64)` for `xyz` or `txy`)
 - `params`: parameter vector `(P,)`
 - `param_dict`: named parameters
 - plus any available grids (`X_grid`, `Y_grid`, `T_grid`)

@@ -4,16 +4,22 @@ This directory contains scripts to regenerate the PDE datasets from scratch with
 
 ## Quick Start
 
-Generate all datasets (200 samples each):
+Generate all bundled datasets (200 samples each; **Allen–Cahn, Burgers, convection, Helmholtz2D, Helmholtz3D, wave2d1**):
 ```bash
 uv run python scripts/dataset_generation/generate_datasets.py --n-samples 200 --seed 42
+```
+
+Single equation:
+
+```bash
+uv run python scripts/dataset_generation/generate_datasets.py -e wave2d1 -n 200 --target-res 64 -o datasets/new
 ```
 
 ## What's Included
 
 - **`generate_datasets.py`** - Main script to generate all bundled PDE datasets
 - **Solvers** live under `src/eff_physics_learn_dataset/solvers/`
-- **Verification** - Built-in PINN-based verification (see `src/eff_physics_learn_dataset/datasets/verification.py`)
+- **Verification** — residual / BC / IC checks in `src/eff_physics_learn_dataset/verification.py` (used by solvers and some dev scripts)
 
 ## Solvers
 
@@ -28,7 +34,7 @@ Each equation uses the most accurate and efficient method:
 | **Helmholtz3D** | **Analytical solution** | 100% | ~0.01s/sample |
 | **Wave2D1** | Finite-difference + sponge BC | ~100%* | ~0.5s/sample |
 
-\*Verification uses smoothed interior PDE residuals on downsampled grids; thresholds are set accordingly.
+\*Verification uses smoothed interior PDE residuals on downsampled grids; thresholds are set accordingly. Initial displacement is a **sum of 1–3** Gaussian sources per sample (`n_sources` in `pde_params`).
 
 ### Key Innovation: Analytical Solutions with Analytical Derivatives
 
@@ -49,6 +55,8 @@ datasets/{equation}/ground_truth/
 ```
 
 Pass `--gt-subdir ground_truth_regenerated` to match older dev tooling, or use `scripts/switch_datasets.py` where applicable.
+
+To preview a **`wave2d1`** sample over all time frames, use `scripts/animate_wave2d1_sample.py` (writes a GIF).
 
 ## Verification
 

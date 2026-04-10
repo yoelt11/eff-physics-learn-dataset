@@ -423,7 +423,8 @@ def load_pde_dataset(
     """Load an equation dataset from local disk.
 
     Args:
-        equation: directory name under `data_dir` (e.g. "helmholtz2D", "burgers")
+        equation: directory name under ``data_dir`` (e.g. ``"helmholtz2D"``, ``"helmholtz3D"``,
+            ``"wave2d1"``, ``"burgers"``). Layout is inferred from grids/shape; see ``FieldLayout``.
         data_dir: base datasets directory (default: ./datasets)
         cache: if True, memoize loads within the process
     """
@@ -443,7 +444,7 @@ def _load_pde_dataset_uncached(equation: str, data_dir: Path) -> PDEDataset:
     root_dir = data_dir / equation
     ground_truth_dir = root_dir / "ground_truth"
     if not ground_truth_dir.exists():
-        # Some datasets (e.g. helmholtz3D) currently store artifacts directly under the equation dir.
+        # Fallback: pickle at equation root (some legacy layouts).
         alt = root_dir
         if alt.exists() and any(alt.glob("*_dataset.pkl")):
             ground_truth_dir = alt

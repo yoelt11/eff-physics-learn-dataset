@@ -11,7 +11,12 @@ from eff_physics_learn_dataset import load_pde_dataset
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Compute solution-space similarity report for dataset splits.")
-    ap.add_argument("--equation", "-e", required=True, help="Dataset directory name (e.g. helmholtz2D)")
+    ap.add_argument(
+        "--equation",
+        "-e",
+        required=True,
+        help="Dataset directory name (e.g. helmholtz2D, helmholtz3D, wave2d1)",
+    )
     ap.add_argument("--data-dir", "-d", default="datasets", help="Datasets root directory")
     ap.add_argument(
         "--mode",

@@ -64,7 +64,15 @@ def main():
     parser.add_argument(
         "--equation",
         "-e",
-        choices=["allen_cahn", "burgers", "convection", "helmholtz2D", "all"],
+        choices=[
+            "allen_cahn",
+            "burgers",
+            "convection",
+            "helmholtz2D",
+            "helmholtz3D",
+            "wave2d1",
+            "all",
+        ],
         default="all",
         help="Equation to process (default: all)",
     )
@@ -91,7 +99,14 @@ def main():
     args = parser.parse_args()
     
     equations = (
-        ["allen_cahn", "burgers", "convection", "helmholtz2D"]
+        [
+            "allen_cahn",
+            "burgers",
+            "convection",
+            "helmholtz2D",
+            "helmholtz3D",
+            "wave2d1",
+        ]
         if args.equation == "all"
         else [args.equation]
     )

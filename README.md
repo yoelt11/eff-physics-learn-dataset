@@ -29,6 +29,7 @@ This repository provides tools and utilities for downloading, processing, and wo
 | `allen_cahn` | Allen-Cahn equation data |
 | `flow_mixing` | Flow mixing simulation data |
 | `convection` | Convection equation data |
+| `wave2d1` | 2D wave equation (time-dependent field) |
 | `hlrp_cdr` | HLRP Convection-Diffusion-Reaction data |
 | `hlrp_convection` | HLRP Convection data |
 | `hlrp_diffusion` | HLRP Diffusion data |
@@ -160,6 +161,7 @@ print(u.shape, ok, metrics)
 ```
 
 ```python
+import numpy as np
 from solvers.wave2d1 import generate_wave2d1_sample
 
 u, x, y, t, ok, metrics = generate_wave2d1_sample(
@@ -172,6 +174,8 @@ u, x, y, t, ok, metrics = generate_wave2d1_sample(
     target_ny=64,
     target_nt=64,
 )
+# Optional: sum of several Gaussian ICs — each row is [x0, y0, sigma, amplitude]
+# u, x, y, t, ok, metrics = generate_wave2d1_sample(..., sources=np.array([[-0.5, 0.0, 0.25, 1.0], [0.8, 0.4, 0.2, 0.8]]))
 print(u.shape, ok, metrics)
 ```
 
@@ -232,6 +236,7 @@ plot a **2D slice** by default (middle slice). You can override:
 ```bash
 uv run python scripts/plot_dataset_samples.py -e flow_mixing -s test --n 25 --slice-index 0
 uv run python scripts/plot_dataset_samples.py -e helmholtz3D -s test --n 25 --slice-index 32
+uv run python scripts/plot_dataset_samples.py -e wave2d1 -d datasets/new -s test --n 25 --slice-axis 1 --slice-index 32
 ```
 
 ## Dependencies

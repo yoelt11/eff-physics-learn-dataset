@@ -7,6 +7,14 @@ from typing import Any, Dict, Literal, Mapping, Sequence
 
 import numpy as np
 
+from .field_layout import (
+    FieldLayout,
+    extent_for_split_rows,
+    infer_field_layout,
+    prepare_batch_for_plot_grid,
+    prepare_batch_for_split_rows,
+    validate_u_against_layout,
+)
 from .pkl_schema import infer_pde_pickle
 from .similarity import solution_similarity_report
 from .splitting import ParametricSplitConfig, compute_parametric_splits
@@ -36,6 +44,7 @@ class PDEDataset:
     grids: Mapping[str, np.ndarray]
     metadata: Mapping[str, Any]
     grid_info: Mapping[str, Any]
+    field_layout: FieldLayout
 
     # Index mapping (view semantics)
     _indices: np.ndarray | None = None
@@ -78,6 +87,7 @@ class PDEDataset:
             grids=self.grids,
             metadata=self.metadata,
             grid_info=self.grid_info,
+            field_layout=self.field_layout,
             _indices=ind,
         )
 
@@ -235,10 +245,12 @@ class PDEDataset:
 
         idx = np.asarray(view.indices, dtype=np.int64)
         sol = self.u[idx]
-        # Standard xt pickles: u (n_x, n_t) with meshgrid(..., indexing='ij'). imshow maps
-        # rows -> vertical, cols -> horizontal; use u.T per panel so horizontal=x, vertical=t.
-        if "X_grid" in self.grids and "T_grid" in self.grids:
-            sol = np.transpose(sol, (0, 2, 1))
+        sol, si, sa = prepare_batch_for_plot_grid(
+            sol,
+            self.field_layout,
+            slice_index=slice_index,
+            slice_axis=slice_axis,
+        )
         pmat = self.params[idx]
         pdicts = [
             {k: float(v) for k, v in zip(self.param_names, row)}  # small & readable titles
@@ -252,8 +264,8 @@ class PDEDataset:
             param_dicts=pdicts,
             n=n,
             seed=seed,
-            slice_index=slice_index,
-            slice_axis=slice_axis,
+            slice_index=si,
+            slice_axis=sa,
             save_path=save_path,
             title=title or f"{self.equation} ({'test' if isinstance(split,str) else 'subset'}) n={n}",
         )
@@ -309,6 +321,7 @@ class PDEDataset:
         n_components: int = 5,
         slice_axis: int = 1,
         slice_index: int | None = None,
+        featurize: Literal["auto", "slice_middle", "flatten"] = "auto",
     ) -> Dict[str, Any]:
         """Compute a solution-space similarity report for the provided splits."""
 
@@ -320,6 +333,8 @@ class PDEDataset:
             n_components=n_components,
             slice_axis=slice_axis,
             slice_index=slice_index,
+            field_layout=self.field_layout,
+            featurize=featurize,
         )
 
     def plot_solution_similarity(
@@ -369,9 +384,7 @@ class PDEDataset:
         gidx_by = {}
         for name, ds in splits.items():
             idx = np.asarray(ds.indices, dtype=np.int64)
-            chunk = self.u[idx]
-            if "X_grid" in self.grids and "T_grid" in self.grids:
-                chunk = np.transpose(chunk, (0, 2, 1))
+            chunk = prepare_batch_for_split_rows(self.u[idx], self.field_layout)
             solutions_by[name] = chunk
             pmat = self.params[idx]
             params_by[name] = [
@@ -379,11 +392,7 @@ class PDEDataset:
             ]
             gidx_by[name] = idx.tolist()
 
-        extent = None
-        if "X_grid" in self.grids and "T_grid" in self.grids:
-            X = np.asarray(self.grids["X_grid"])
-            T = np.asarray(self.grids["T_grid"])
-            extent = (float(X.min()), float(X.max()), float(T.min()), float(T.max()))
+        extent = extent_for_split_rows(self.field_layout, self.grids)
 
         from .plotting import plot_solution_rows
 
@@ -445,6 +454,14 @@ def _load_pde_dataset_uncached(equation: str, data_dir: Path) -> PDEDataset:
     raw = _load_pickle(pkl_path)
     inferred = infer_pde_pickle(raw, param_order="file")
 
+    field_layout = infer_field_layout(
+        equation=equation,
+        u=inferred.u,
+        grids=inferred.grids,
+        metadata=inferred.metadata,
+    )
+    validate_u_against_layout(inferred.u, field_layout, inferred.grids, strict=False)
+
     return PDEDataset(
         equation=equation,
         root_dir=root_dir,
@@ -455,6 +472,7 @@ def _load_pde_dataset_uncached(equation: str, data_dir: Path) -> PDEDataset:
         grids=inferred.grids,
         metadata=inferred.metadata,
         grid_info=inferred.grid_info,
+        field_layout=field_layout,
         _indices=None,
     )
 

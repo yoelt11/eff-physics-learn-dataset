@@ -35,6 +35,30 @@ sample = ds[0]
 print(sample["u"].shape, sample["param_dict"].keys())
 ```
 
+## Field layouts (axis semantics)
+
+Each loaded dataset has a ``FieldLayout`` on ``ds.field_layout`` describing how batch
+``u`` is indexed after the leading sample dimension ``N``:
+
+| ``layout_id`` | ``u`` shape (per sample) | Typical grids |
+|---------------|--------------------------|---------------|
+| ``xt`` | ``(n_x, n_t)`` | ``X_grid``, ``T_grid`` |
+| ``xy`` | ``(n_x, n_y)`` | ``X_grid``, ``Y_grid`` |
+| ``xyz`` | ``(n_x, n_y, n_z)`` | ``X_grid``, ``Y_grid``, ``Z_grid`` / ``Z`` |
+| ``txy`` | ``(n_t, n_x, n_y)`` | ``T_grid``, ``X_grid``, ``Y_grid`` |
+
+Inference uses grid keys and the spatial rank ``u.ndim - 1``. If inference fails, set in the pickle:
+
+```python
+metadata["field_layout"] = {"layout_id": "txy"}  # or xt / xy / xyz
+```
+
+Optional validation runs on load (warnings if grid sizes disagree with ``u``).
+
+**Plotting:** ``plot_samples`` / ``plot_split_solution_rows`` use the layout (e.g. transpose ``xt`` for imshow, slice 4D tensors for 2D panels).
+
+**Similarity:** ``solution_similarity_report(..., featurize="auto")`` slices 4D fields along the layout default (time for ``txy``, ``x`` for ``xyz``). Use ``featurize="flatten"`` for the full tensor (can be large). The CLI mirrors this via ``--featurize``.
+
 ## Standard modality: seeded budgets + fixed test split
 
 The test split is **authoritative** and comes from:
@@ -102,6 +126,26 @@ ds.plot_samples(
     save_path="docs/_assets/results/helmholtz2D/helmholtz2D_test25.png",
 )
 ```
+
+For **Helmholtz3D** (`u` shape `(N, n_x, n_y, n_z)`), pick a fixed **z** slice (axis `3`) and an index (e.g. middle grid point):
+
+```bash
+uv run python scripts/plot_dataset_samples.py -e helmholtz3D -d datasets/new -s test --n 25 \
+  --slice-axis 3 --slice-index 32
+```
+
+Example output checked into the repo: `docs/_assets/results/helmholtz3D/helmholtz3D_test25.png`.
+
+For **Wave2D1** (`u` shape `(N, n_t, n_x, n_y)`, layout **`txy`**), pick a **time** slice (axis `1`) and an index (e.g. middle frame):
+
+```bash
+uv run python scripts/plot_dataset_samples.py -e wave2d1 -d datasets/new -s test --n 25 \
+  --slice-axis 1 --slice-index 32
+```
+
+Example output: `docs/_assets/results/wave2d1/wave2d1_test25.png`.
+
+The pickle stores **`n_sources` ∈ {1,2,3}** plus **three** Gaussian parameter blocks (`src1_*` … `src3_*`); only the first `n_sources` blocks define the initial condition. Parametric plots use PCA when the parameter dimension is large.
 
 ## Plot parameter distributions (scatter)
 

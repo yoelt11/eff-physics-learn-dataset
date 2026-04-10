@@ -5,7 +5,7 @@
 ```python
 from eff_physics_learn_dataset import load_pde_dataset
 
-# Load any dataset: allen_cahn, burgers, convection, helmholtz2D
+# Load any dataset: allen_cahn, burgers, convection, helmholtz2D, helmholtz3D, wave2d1, ks, …
 ds = load_pde_dataset("convection")
 
 # Get parametric splits (uses solution_percentile method by default)

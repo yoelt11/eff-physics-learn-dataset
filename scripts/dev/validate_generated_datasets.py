@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from eff_physics_learn_dataset import load_pde_dataset
 
 
-def validate_dataset(equation: str, data_dir: Path, subfolder: str = "ground_truth_regenerated") -> dict:
+def validate_dataset(equation: str, data_dir: Path, subfolder: str = "ground_truth") -> dict:
     """Validate a generated dataset.
 
     Args:
@@ -165,7 +165,14 @@ def main():
     parser.add_argument(
         "-e", "--equation",
         nargs="+",
-        default=["allen_cahn", "burgers", "convection", "helmholtz2D"],
+        default=[
+            "allen_cahn",
+            "burgers",
+            "convection",
+            "helmholtz2D",
+            "helmholtz3D",
+            "wave2d1",
+        ],
         help="Equation(s) to validate",
     )
     parser.add_argument(
@@ -177,8 +184,8 @@ def main():
     parser.add_argument(
         "--subfolder",
         type=str,
-        default="ground_truth_regenerated",
-        help="Subfolder name (default: ground_truth_regenerated)",
+        default="ground_truth",
+        help="Subfolder name (default: ground_truth; use ground_truth_regenerated for legacy layouts)",
     )
 
     args = parser.parse_args()

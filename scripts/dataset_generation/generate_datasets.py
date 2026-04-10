@@ -13,13 +13,17 @@ from pathlib import Path
 
 import numpy as np
 
-# Add solvers to path
-sys.path.insert(0, str(Path(__file__).parent / "solvers"))
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SRC = _REPO_ROOT / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
-from generate_allen_cahn import generate_allen_cahn_sample
-from generate_burgers import generate_burgers_sample
-from generate_convection_analytical import generate_convection_sample_analytical
-from generate_helmholtz2d_analytical import generate_helmholtz2d_sample_analytical
+from eff_physics_learn_dataset.solvers.allen_cahn import generate_allen_cahn_sample
+from eff_physics_learn_dataset.solvers.burgers import generate_burgers_sample
+from eff_physics_learn_dataset.solvers.convection import generate_convection_sample_analytical
+from eff_physics_learn_dataset.solvers.helmholtz2d import generate_helmholtz2d_sample_analytical
+from eff_physics_learn_dataset.solvers.helmholtz3d import generate_helmholtz3d_sample_analytical
+from eff_physics_learn_dataset.solvers.wave2d1 import generate_wave2d1_sample
 
 
 # Parameter ranges from inspection
@@ -41,6 +45,29 @@ PARAM_RANGES = {
         "a2": {"min": 0.5, "max": 5.0},
         "k": {"min": 0.5, "max": 5.0},
     },
+    "helmholtz3D": {
+        "a1": {"min": 0.5, "max": 5.0},
+        "a2": {"min": 0.5, "max": 5.0},
+        "a3": {"min": 0.5, "max": 5.0},
+        "k": {"min": 0.5, "max": 5.0},
+    },
+    # 2D wave: u_tt = c^2 (u_xx + u_yy); sum of 1–3 Gaussian ICs [x0,y0,sd,amp] each
+    "wave2d1": {
+        "c0": {"min": 0.75, "max": 1.35},
+        "n_sources": {"min": 1, "max": 3, "integer": True},
+        "src1_x0": {"min": -1.5, "max": 1.5},
+        "src1_y0": {"min": -1.5, "max": 1.5},
+        "src1_sd": {"min": 0.18, "max": 0.42},
+        "src1_amp": {"min": 0.6, "max": 1.4},
+        "src2_x0": {"min": -1.5, "max": 1.5},
+        "src2_y0": {"min": -1.5, "max": 1.5},
+        "src2_sd": {"min": 0.18, "max": 0.42},
+        "src2_amp": {"min": 0.6, "max": 1.4},
+        "src3_x0": {"min": -1.5, "max": 1.5},
+        "src3_y0": {"min": -1.5, "max": 1.5},
+        "src3_sd": {"min": 0.18, "max": 0.42},
+        "src3_amp": {"min": 0.6, "max": 1.4},
+    },
 }
 
 # Domain configurations
@@ -49,6 +76,12 @@ DOMAIN_CONFIGS = {
     "burgers": {"x_domain": (-1.0, 1.0), "t_domain": (0.0, 1.0)},
     "convection": {"x_domain": (0.0, 2.0 * np.pi), "t_domain": (0.0, 1.0)},
     "helmholtz2D": {"x_domain": (-1.0, 1.0), "y_domain": (-1.0, 1.0)},
+    "helmholtz3D": {
+        "x_domain": (-1.0, 1.0),
+        "y_domain": (-1.0, 1.0),
+        "z_domain": (-1.0, 1.0),
+    },
+    "wave2d1": {"x_domain": (-3.0, 3.0), "y_domain": (-3.0, 3.0)},
 }
 
 # Adjusted verification thresholds (relaxed for convection based on existing data)
@@ -57,6 +90,9 @@ VERIFY_THRESHOLDS = {
     "burgers": {"pde_threshold": 5.0, "bc_threshold": 0.1, "ic_threshold": 1e-3},
     "convection": {"pde_threshold": 500.0, "bc_threshold": 1e-3, "ic_threshold": 1e-3},  # Relaxed
     "helmholtz2D": {"pde_threshold": 100.0, "bc_threshold": 1e-4},
+    "helmholtz3D": {"pde_threshold": 100.0, "bc_threshold": 1e-4},
+    # Downsampled finite-difference + np.gradient verification (softer than analytical cases)
+    "wave2d1": {"pde_threshold": 8.0, "bc_threshold": 0.45, "ic_threshold": 5e-3},
 }
 
 
@@ -64,7 +100,8 @@ def sample_parameters(param_ranges: dict, n: int, seed: int) -> list[dict]:
     """Sample parameters uniformly from ranges.
 
     Args:
-        param_ranges: Dict mapping param name to {min, max}
+        param_ranges: Dict mapping param name to ``{min, max}`` or, for integers,
+            ``{min, max, integer: True}`` (inclusive ``max``).
         n: Number of samples
         seed: Random seed
 
@@ -77,7 +114,11 @@ def sample_parameters(param_ranges: dict, n: int, seed: int) -> list[dict]:
     for i in range(n):
         params = {}
         for name, bounds in param_ranges.items():
-            params[name] = float(rng.uniform(bounds["min"], bounds["max"]))
+            if bounds.get("integer"):
+                lo, hi = int(bounds["min"]), int(bounds["max"])
+                params[name] = int(rng.integers(lo, hi + 1))
+            else:
+                params[name] = float(rng.uniform(bounds["min"], bounds["max"]))
         samples.append(params)
 
     return samples
@@ -91,6 +132,8 @@ def generate_equation_dataset(
     solver_resolution: int = 512,
     target_resolution: int = 64,
     max_retries: int = 3,
+    *,
+    ground_truth_subdir: str = "ground_truth",
 ) -> dict:
     """Generate dataset for a single equation.
 
@@ -113,6 +156,10 @@ def generate_equation_dataset(
     param_ranges = PARAM_RANGES[equation]
     domain_config = DOMAIN_CONFIGS[equation]
     verify_thresholds = VERIFY_THRESHOLDS[equation]
+
+    # Wave2D: cap spatial solver size so default --solver-res stays tractable (Nt × Nx × Ny FDTD).
+    wave_solver_n = int(max(96, min(solver_resolution, 200)))
+    wave_t_steps = int(max(200, min(320, int(1.35 * wave_solver_n))))
 
     # Sample parameters
     param_samples = sample_parameters(param_ranges, n_samples, seed)
@@ -147,7 +194,7 @@ def generate_equation_dataset(
                     u, x, t, is_valid, metrics = generate_burgers_sample(
                         nu=params["nu"],
                         A=params["A"],
-                        k=params["k"],
+                        k=int(round(float(params["k"]))),
                         solver_nx=solver_resolution,
                         solver_nt=solver_resolution,
                         target_nx=target_resolution,
@@ -172,6 +219,42 @@ def generate_equation_dataset(
                         target_ny=target_resolution,
                         verify_thresholds=verify_thresholds,
                         **domain_config,
+                    )
+                elif equation == "helmholtz3D":
+                    u, x, y, z, is_valid, metrics = generate_helmholtz3d_sample_analytical(
+                        k=params["k"],
+                        a1=params["a1"],
+                        a2=params["a2"],
+                        a3=params["a3"],
+                        target_nx=target_resolution,
+                        target_ny=target_resolution,
+                        target_nz=target_resolution,
+                        verify_thresholds=verify_thresholds,
+                        **domain_config,
+                    )
+                elif equation == "wave2d1":
+                    n_src = int(params["n_sources"])
+                    src_rows = [
+                        [params["src1_x0"], params["src1_y0"], params["src1_sd"], params["src1_amp"]],
+                        [params["src2_x0"], params["src2_y0"], params["src2_sd"], params["src2_amp"]],
+                        [params["src3_x0"], params["src3_y0"], params["src3_sd"], params["src3_amp"]],
+                    ][:n_src]
+                    sources = np.asarray(src_rows, dtype=np.float64)
+                    u, x, y, t, is_valid, metrics = generate_wave2d1_sample(
+                        c0=params["c0"],
+                        sources=sources,
+                        velocity_type="constant",
+                        t_steps=wave_t_steps,
+                        solver_nx=wave_solver_n,
+                        solver_ny=wave_solver_n,
+                        target_nx=target_resolution,
+                        target_ny=target_resolution,
+                        target_nt=target_resolution,
+                        verify_thresholds=verify_thresholds,
+                        x_domain=domain_config["x_domain"],
+                        y_domain=domain_config["y_domain"],
+                        backend="numpy",
+                        dtype=np.float64,
                     )
                 else:
                     raise ValueError(f"Unknown equation: {equation}")
@@ -211,6 +294,31 @@ def generate_equation_dataset(
             "ny": target_resolution,
             "grid_size": (target_resolution, target_resolution),
         }
+    elif equation == "helmholtz3D":
+        X_grid, Y_grid, Z_grid = np.meshgrid(x, y, z, indexing="ij")
+        grids = {"X_grid": X_grid, "Y_grid": Y_grid, "Z_grid": Z_grid}
+        grid_info = {
+            "x_domain": domain_config["x_domain"],
+            "y_domain": domain_config["y_domain"],
+            "z_domain": domain_config["z_domain"],
+            "nx": target_resolution,
+            "ny": target_resolution,
+            "nz": target_resolution,
+            "grid_size": (target_resolution, target_resolution, target_resolution),
+        }
+    elif equation == "wave2d1":
+        X_grid, Y_grid = np.meshgrid(x, y, indexing="ij")
+        _, T_grid = np.meshgrid(x, t, indexing="ij")
+        grids = {"X_grid": X_grid, "Y_grid": Y_grid, "T_grid": T_grid}
+        grid_info = {
+            "x_domain": domain_config["x_domain"],
+            "y_domain": domain_config["y_domain"],
+            "t_span": (float(np.asarray(t)[0]), float(np.asarray(t)[-1])),
+            "nx": target_resolution,
+            "ny": target_resolution,
+            "nt": target_resolution,
+            "grid_size": (target_resolution, target_resolution, target_resolution),
+        }
     else:
         X_grid, T_grid = np.meshgrid(x, t, indexing='ij')
         grids = {"X_grid": X_grid, "T_grid": T_grid}
@@ -222,22 +330,34 @@ def generate_equation_dataset(
             "grid_size": (target_resolution, target_resolution),
         }
 
+    gsz = grid_info["grid_size"]
+    if equation == "wave2d1":
+        solver_gsz = (wave_t_steps, wave_solver_n, wave_solver_n)
+    else:
+        solver_gsz = tuple(solver_resolution for _ in range(len(gsz)))
+
     # Metadata
     metadata = {
         "domain": domain_config.get("x_domain", domain_config.get("x_domain")),
         "n_samples": len(solutions),
         "parameter_ranges": param_ranges,
-        "grid_size": (target_resolution, target_resolution),
-        "solver_grid_size": (solver_resolution, solver_resolution),
+        "grid_size": gsz,
+        "solver_grid_size": solver_gsz,
         "sampling_method": "uniform_random",
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "timing": {"total_seconds": elapsed, "per_sample_seconds": elapsed / len(solutions) if len(solutions) > 0 else 0},
         "verification_thresholds": verify_thresholds,
         "seed": seed,
     }
+    if equation == "helmholtz2D":
+        metadata["field_layout"] = {"layout_id": "xy"}
+    elif equation == "helmholtz3D":
+        metadata["field_layout"] = {"layout_id": "xyz"}
+    elif equation == "wave2d1":
+        metadata["field_layout"] = {"layout_id": "txy"}
 
-    # Save dataset
-    out_dir = output_dir / equation / "ground_truth_regenerated"
+    # Save dataset (default subdir matches load_pde_dataset: .../ground_truth/*_dataset.pkl)
+    out_dir = output_dir / equation / ground_truth_subdir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dataset = {
@@ -282,7 +402,8 @@ def generate_equation_dataset(
     print(f"  Generated: {stats['n_generated']}")
     print(f"  Failed: {stats['n_failed']}")
     print(f"  Success rate: {stats['success_rate']*100:.1f}%")
-    print(f"  Time: {elapsed:.1f}s ({elapsed/len(solutions):.2f}s per sample)")
+    per_s = elapsed / len(solutions) if len(solutions) else 0.0
+    print(f"  Time: {elapsed:.1f}s ({per_s:.2f}s per sample)")
 
     return stats
 
@@ -291,7 +412,15 @@ def main():
     parser = argparse.ArgumentParser(description="Generate verified PDE datasets")
     parser.add_argument(
         "-e", "--equation",
-        choices=["allen_cahn", "burgers", "convection", "helmholtz2D", "all"],
+        choices=[
+            "allen_cahn",
+            "burgers",
+            "convection",
+            "helmholtz2D",
+            "helmholtz3D",
+            "wave2d1",
+            "all",
+        ],
         default="all",
         help="Equation to generate (default: all)",
     )
@@ -325,10 +454,20 @@ def main():
         default=64,
         help="Target grid resolution (default: 64)",
     )
+    parser.add_argument(
+        "--gt-subdir",
+        type=str,
+        default="ground_truth",
+        help="Subdirectory under <output>/<equation>/ for pickles (default: ground_truth)",
+    )
 
     args = parser.parse_args()
 
-    equations = ["allen_cahn", "burgers", "convection", "helmholtz2D"] if args.equation == "all" else [args.equation]
+    equations = (
+        ["allen_cahn", "burgers", "convection", "helmholtz2D", "helmholtz3D", "wave2d1"]
+        if args.equation == "all"
+        else [args.equation]
+    )
 
     print("=" * 60)
     print("Verified PDE Dataset Generation")
@@ -350,6 +489,7 @@ def main():
                 output_dir=args.output_dir,
                 solver_resolution=args.solver_res,
                 target_resolution=args.target_res,
+                ground_truth_subdir=args.gt_subdir,
             )
             all_stats.append(stats)
         except Exception as e:

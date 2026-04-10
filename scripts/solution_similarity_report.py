@@ -11,7 +11,12 @@ from eff_physics_learn_dataset import load_pde_dataset
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Compute solution-space similarity report for dataset splits.")
-    ap.add_argument("--equation", "-e", required=True, help="Dataset directory name (e.g. helmholtz2D)")
+    ap.add_argument(
+        "--equation",
+        "-e",
+        required=True,
+        help="Dataset directory name (e.g. helmholtz2D, helmholtz3D, wave2d1)",
+    )
     ap.add_argument("--data-dir", "-d", default="datasets", help="Datasets root directory")
     ap.add_argument(
         "--mode",
@@ -68,6 +73,13 @@ def main() -> None:
         type=int,
         default=1,
         help="For 4D solutions, which axis is the slice axis (default: 1).",
+    )
+    ap.add_argument(
+        "--featurize",
+        default="auto",
+        choices=["auto", "slice_middle", "flatten"],
+        help="Solution featurization for PCA: auto uses FieldLayout defaults for 4D; "
+        "slice_middle forces one middle slice; flatten uses the full tensor (can be large).",
     )
     ap.add_argument(
         "--out-json",
@@ -180,6 +192,7 @@ def main() -> None:
         n_components=args.n_components,
         slice_axis=args.slice_axis,
         slice_index=args.slice_index,
+        featurize=args.featurize,
     )
 
     out_json = args.out_json
@@ -192,6 +205,8 @@ def main() -> None:
     compact = {
         "train_key": report["train_key"],
         "n_components": report["n_components"],
+        "field_layout_id": report.get("field_layout_id"),
+        "featurize": report.get("featurize"),
         "explained_variance_ratio": report["explained_variance_ratio"].tolist(),
         "splits": {
             k: {kk: vv for kk, vv in v.items() if not kk.endswith("_to_train") and not kk.startswith("dist_")}

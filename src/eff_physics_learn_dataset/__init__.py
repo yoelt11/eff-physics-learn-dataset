@@ -8,6 +8,7 @@ from pathlib import Path
 from .dataset import PDEDataset
 from .dataset import load_pde_dataset as _base_load_pde_dataset
 from .download import download_dataset, load_dataset_links
+from .field_layout import FieldLayout, infer_field_layout
 
 __version__ = "0.1.0"
 
@@ -68,6 +69,8 @@ def load_pde_dataset(
 
 __all__ = [
     "download_dataset",
+    "FieldLayout",
+    "infer_field_layout",
     "load_dataset_links",
     "load_pde_dataset",
     "PDEDataset",

@@ -41,7 +41,14 @@ def main() -> None:
     ap.add_argument(
         "--equations",
         nargs="+",
-        default=["allen_cahn", "burgers", "convection", "helmholtz2D"],
+        default=[
+            "allen_cahn",
+            "burgers",
+            "convection",
+            "helmholtz2D",
+            "helmholtz3D",
+            "wave2d1",
+        ],
         help="Dataset names to include",
     )
     ap.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2], help="Seeds to include")

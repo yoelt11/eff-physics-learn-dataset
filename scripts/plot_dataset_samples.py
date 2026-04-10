@@ -8,7 +8,12 @@ from eff_physics_learn_dataset import load_pde_dataset
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Generate a 25-sample plot for a dataset split.")
-    ap.add_argument("--equation", "-e", required=True, help="Dataset directory name (e.g. helmholtz2D)")
+    ap.add_argument(
+        "--equation",
+        "-e",
+        required=True,
+        help="Dataset directory name (e.g. helmholtz2D, helmholtz3D, wave2d1, burgers)",
+    )
     ap.add_argument("--data-dir", "-d", default="datasets", help="Datasets root directory")
     ap.add_argument("--split", "-s", default="test", choices=["test", "all"], help="Which split to plot")
     ap.add_argument("--n", type=int, default=25, help="Number of samples to plot")

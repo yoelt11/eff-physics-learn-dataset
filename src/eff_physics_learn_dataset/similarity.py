@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Literal, Mapping
 
 import numpy as np
+
+from .field_layout import FieldLayout, default_similarity_slice_axis
 
 
 @dataclass(frozen=True)
@@ -23,36 +25,47 @@ def vectorize_solutions(
     *,
     slice_axis: int = 1,
     slice_index: int | None = None,
+    field_layout: FieldLayout | None = None,
+    featurize: Literal["auto", "slice_middle", "flatten"] = "auto",
 ) -> np.ndarray:
     """Convert solution tensors into (N, D) feature vectors.
 
     Defaults:
-    - (N,H,W): flatten
-    - (N,S,H,W): take middle slice along `slice_axis` (default 1), then flatten
-    - (N,H,W,S): if slice_axis=3, slice there, then flatten
+    - ``featurize="flatten"``: ``u.reshape(N, -1)`` for any rank ≥ 2.
+    - ``(N,H,W)``: flatten
+    - ``(N,S,H,W)``: middle slice (or ``slice_index``) along an axis, then flatten
 
-    Note: For full 3D volumetric similarity, you may want a different featurization
-    (e.g., downsample and flatten). This default is designed to be robust and cheap.
+    If ``field_layout`` is set and ``featurize`` is ``"auto"`` or ``"slice_middle"``, the slice
+    axis for 4D tensors defaults to :func:`default_similarity_slice_axis` (e.g. time for ``txy``,
+    ``x`` for ``xyz``). Otherwise ``slice_axis`` / ``slice_index`` match the legacy behavior.
+
+    For full 3D volumetric similarity without slicing, pass ``featurize="flatten"`` (can be large).
     """
 
     u = np.asarray(u)
+    if featurize == "flatten":
+        if u.ndim < 2:
+            raise ValueError(f"Expected batched u with ndim >= 2, got {u.shape}")
+        return u.reshape(u.shape[0], -1).astype(np.float32)
+
     if u.ndim == 3:
         return u.reshape(u.shape[0], -1).astype(np.float32)
 
     if u.ndim == 4:
-        ax = int(slice_axis)
+        if field_layout is not None and featurize in ("auto", "slice_middle"):
+            ax = default_similarity_slice_axis(field_layout)
+        else:
+            ax = int(slice_axis)
         if ax < 0:
             ax = u.ndim + ax
         S = u.shape[ax]
-        if slice_index is None:
-            slice_index = S // 2
-        slice_index = int(slice_index)
-        if not (0 <= slice_index < S):
-            raise ValueError(f"slice_index={slice_index} out of bounds for axis size {S}")
+        si = S // 2 if slice_index is None else int(slice_index)
+        if not (0 <= si < S):
+            raise ValueError(f"slice_index={si} out of bounds for axis size {S}")
 
         if ax != 1:
             u = np.moveaxis(u, ax, 1)  # (N,S,H,W)
-        u2 = u[:, slice_index, :, :]
+        u2 = u[:, si, :, :]
         return u2.reshape(u2.shape[0], -1).astype(np.float32)
 
     raise ValueError(f"Unsupported solution shape for vectorization: {u.shape}")
@@ -153,6 +166,8 @@ def solution_similarity_report(
     n_components: int = 5,
     slice_axis: int = 1,
     slice_index: int | None = None,
+    field_layout: FieldLayout | None = None,
+    featurize: Literal["auto", "slice_middle", "flatten"] = "auto",
 ) -> Dict[str, Any]:
     """Compute a similarity report in solution-space for provided index splits.
 
@@ -166,7 +181,13 @@ def solution_similarity_report(
 
     # Union of indices for fitting PCA
     all_idx = np.unique(np.concatenate([np.asarray(v, dtype=np.int64) for v in splits.values()]))
-    X_all = vectorize_solutions(u[all_idx], slice_axis=slice_axis, slice_index=slice_index)
+    X_all = vectorize_solutions(
+        u[all_idx],
+        slice_axis=slice_axis,
+        slice_index=slice_index,
+        field_layout=field_layout,
+        featurize=featurize,
+    )
 
     model, Z_all = fit_solution_pca(X_all, n_components=n_components)
     # map idx -> embedding row
@@ -183,6 +204,8 @@ def solution_similarity_report(
         "train_key": train_key,
         "n_components": int(n_components),
         "explained_variance_ratio": model.explained_variance_ratio,
+        "field_layout_id": field_layout.layout_id if field_layout is not None else None,
+        "featurize": featurize,
         "splits": {},
     }
 

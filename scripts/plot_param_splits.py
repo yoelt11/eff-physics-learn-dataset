@@ -18,7 +18,12 @@ def _to_snake_case(text: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Plot parameter-space distributions for dataset splits.")
-    ap.add_argument("--equation", "-e", required=True, help="Dataset directory name (e.g. helmholtz2D)")
+    ap.add_argument(
+        "--equation",
+        "-e",
+        required=True,
+        help="Dataset directory name (e.g. helmholtz2D, helmholtz3D, wave2d1)",
+    )
     ap.add_argument("--data-dir", "-d", default="datasets", help="Datasets root directory")
     ap.add_argument(
         "--mode",

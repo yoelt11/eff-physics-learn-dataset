@@ -15,9 +15,9 @@ This repository provides tools and utilities for downloading, processing, and wo
   - **seeded training budgets** (e.g. 25/50/75 or any `n_train`)
   - **parametric interpolation vs extrapolation** splits for few-shot training
 - **Plot smoke tests** (e.g. a 25-sample grid from the fixed test split)
-- Lightweight **PDE solvers** under `src/solvers/` (optional ground-truth generation), with an optional `backend="jax"` for JIT-friendly generation
-- Lightweight **verification** utilities in `src/verification.py` (NumPy-based checks for PDE residual + BC/IC sanity)
-- JAX-based **PINN loss functions** in `src/pinn_losses.py` for the included PDEs
+- Lightweight **PDE solvers** under `src/eff_physics_learn_dataset/solvers/` (optional ground-truth generation), with an optional `backend="jax"` for JIT-friendly generation
+- **Verification** utilities in `src/eff_physics_learn_dataset/verification.py` (NumPy-based checks for PDE residual + BC/IC sanity)
+- JAX-based **PINN loss functions** in `src/pinn_losses.py` (includes `wave2d1` and the scalar PDEs below)
 
 ## Available Datasets
 
@@ -29,6 +29,8 @@ This repository provides tools and utilities for downloading, processing, and wo
 | `allen_cahn` | Allen-Cahn equation data |
 | `flow_mixing` | Flow mixing simulation data |
 | `convection` | Convection equation data |
+| `ks` | Kuramoto–Sivashinsky equation data |
+| `wave2d1` | 2D wave equation (time-dependent field) |
 | `hlrp_cdr` | HLRP Convection-Diffusion-Reaction data |
 | `hlrp_convection` | HLRP Convection data |
 | `hlrp_diffusion` | HLRP Diffusion data |
@@ -60,9 +62,12 @@ uv pip install -e .
 
 The repository uses a consistent axis convention for generated solutions and grids:
 
-- 1D + time PDEs (`allen_cahn`, `burgers`, `convection`, `ks`): `u.shape == (n_x, n_t)` with `meshgrid(x, t, indexing='ij')`
-- 2D spatial PDEs (`helmholtz2D`): `u.shape == (n_x, n_y)` with `meshgrid(x, y, indexing='ij')`
-- Time-dependent 2D fields like `wave2d1` keep explicit time-first tensors: `u.shape == (n_t, n_x, n_y)`
+- 1D + time PDEs (`allen_cahn`, `burgers`, `convection`, `ks`): batch `ds.u` is `(N, n_x, n_t)` with `meshgrid(x, t, indexing='ij')` (layout **`xt`**)
+- 2D spatial (`helmholtz2D`): `(N, n_x, n_y)` (layout **`xy`**)
+- 3D spatial (`helmholtz3D`): `(N, n_x, n_y, n_z)` (layout **`xyz`**)
+- Time-dependent 2D (`wave2d1`): `(N, n_t, n_x, n_y)` (layout **`txy`**)
+
+Use `ds.field_layout` and `docs/dataset_api.md` for slicing and similarity options.
 
 ### Downloading Datasets
 
@@ -78,9 +83,11 @@ Download all datasets:
 uv run python scripts/download_datasets.py
 ```
 
-Download a specific dataset:
+Download specific datasets (see `configs/datasets/dataset_links.toml` for IDs):
 ```bash
 uv run python scripts/download_datasets.py -d helmholtz2D
+uv run python scripts/download_datasets.py -d helmholtz3D
+uv run python scripts/download_datasets.py -d wave2d1
 ```
 
 ### Loading datasets (library API)
@@ -90,9 +97,10 @@ The main entrypoint is the lightweight “HF-like” dataset wrapper.
 ```python
 from eff_physics_learn_dataset import load_pde_dataset
 
-# Default: looks under ./datasets/{equation}/ground_truth/
+# Default: ./datasets/{equation}/ground_truth/ — or auto-download to a temp dir if missing
+# (requires an entry in dataset_links.toml, e.g. helmholtz3D, wave2d1).
 ds = load_pde_dataset("helmholtz2D")
-print(len(ds), ds.param_names, ds.u.shape)
+print(len(ds), ds.param_names, ds.u.shape, ds.field_layout.layout_id)
 
 sample = ds[0]
 print(sample["u"].shape, sample["param_dict"])
@@ -132,6 +140,8 @@ chmod +x scripts/download_datasets.sh
 # Run it
 ./scripts/download_datasets.sh --list
 ./scripts/download_datasets.sh -d helmholtz2D
+./scripts/download_datasets.sh -d helmholtz3D
+./scripts/download_datasets.sh -d wave2d1
 ```
 
 ### HuggingFace-like dataset API
@@ -140,12 +150,12 @@ See `docs/dataset_api.md` for full examples.
 
 ### Using the solvers (optional: ground-truth generation)
 
-This repo also includes lightweight solver modules under `src/solvers/` that can be used to generate single PDE solutions (useful for debugging, demos, or for building your own dataset generator).
+This repo also includes solver modules under `eff_physics_learn_dataset.solvers` for single-sample generation (debugging, demos, custom dataset builders).
 
-Examples:
+Examples (after `uv pip install -e .`):
 
 ```python
-from solvers.ks import generate_ks_sample
+from eff_physics_learn_dataset.solvers.ks import generate_ks_sample
 
 u, x, t, ok, metrics = generate_ks_sample(
     alpha=1.10,
@@ -160,7 +170,8 @@ print(u.shape, ok, metrics)
 ```
 
 ```python
-from solvers.wave2d1 import generate_wave2d1_sample
+import numpy as np
+from eff_physics_learn_dataset.solvers.wave2d1 import generate_wave2d1_sample
 
 u, x, y, t, ok, metrics = generate_wave2d1_sample(
     c0=1.0,
@@ -172,6 +183,8 @@ u, x, y, t, ok, metrics = generate_wave2d1_sample(
     target_ny=64,
     target_nt=64,
 )
+# Optional: sum of several Gaussian ICs — each row is [x0, y0, sigma, amplitude]
+# u, x, y, t, ok, metrics = generate_wave2d1_sample(..., sources=np.array([[-0.5, 0.0, 0.25, 1.0], [0.8, 0.4, 0.2, 0.8]]))
 print(u.shape, ok, metrics)
 ```
 
@@ -182,8 +195,8 @@ Quick visualization examples:
 import matplotlib.pyplot as plt
 import numpy as np
 
-from solvers.wave2d1 import generate_wave2d1_sample
-from plotting import plot_solution_rows
+from eff_physics_learn_dataset.solvers.wave2d1 import generate_wave2d1_sample
+from eff_physics_learn_dataset.plotting import plot_solution_rows
 
 u, x, y, t, ok, metrics = generate_wave2d1_sample()
 
@@ -218,6 +231,13 @@ Generate a 25-sample plot for a dataset split:
 uv run python scripts/plot_dataset_samples.py -e helmholtz2D -s test --n 25
 ```
 
+Full **time animation** for one `wave2d1` sample (GIF):
+
+```bash
+uv run python scripts/animate_wave2d1_sample.py -i 0 --fps 15 \
+  -o docs/_assets/results/wave2d1/wave2d1_sample0_sequence.gif
+```
+
 ### Results folder
 
 By default, plot/report scripts write to:
@@ -231,7 +251,8 @@ plot a **2D slice** by default (middle slice). You can override:
 
 ```bash
 uv run python scripts/plot_dataset_samples.py -e flow_mixing -s test --n 25 --slice-index 0
-uv run python scripts/plot_dataset_samples.py -e helmholtz3D -s test --n 25 --slice-index 32
+uv run python scripts/plot_dataset_samples.py -e helmholtz3D -s test --n 25 --slice-axis 3 --slice-index 32
+uv run python scripts/plot_dataset_samples.py -e wave2d1 -s test --n 25 --slice-axis 1 --slice-index 32
 ```
 
 ## Dependencies

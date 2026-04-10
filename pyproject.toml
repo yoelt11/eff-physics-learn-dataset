@@ -14,17 +14,13 @@ dependencies = [
     # Data handling
     "numpy>=1.24.0",
     "scipy>=1.11.0",
-    
     # Configuration and utilities
     "tomli>=2.0.0",
     "tomli-w>=1.0.0",
-    
     # Google Drive download utility
     "gdown>=4.7.0",
-    
     # Progress bars
     "tqdm>=4.66.0",
-
     # Plotting (smoke-test visualizations)
     "matplotlib>=3.8.0",
 ]

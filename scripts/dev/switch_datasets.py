@@ -23,7 +23,14 @@ from pathlib import Path
 from eff_physics_learn_dataset import load_pde_dataset
 
 
-EQUATIONS = ["allen_cahn", "burgers", "convection", "helmholtz2D"]
+EQUATIONS = [
+    "allen_cahn",
+    "burgers",
+    "convection",
+    "helmholtz2D",
+    "helmholtz3D",
+    "wave2d1",
+]
 DATA_DIR = Path("datasets")
 
 

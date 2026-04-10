@@ -42,7 +42,25 @@ GENERATION_STATS = {
         "solver": "Analytical solution with analytical derivatives",
         "solver_resolution": "64x64 (direct evaluation)",
         "verification": "PINN-based (PDE + BC + IC losses)"
-    }
+    },
+    "helmholtz3D": {
+        "requested": 200,
+        "generated": 200,
+        "success_rate": 100.0,
+        "time_seconds": 5.0,
+        "solver": "Analytical solution with analytical derivatives",
+        "solver_resolution": "64³ (direct evaluation)",
+        "verification": "Analytical PDE + BC residual checks"
+    },
+    "wave2d1": {
+        "requested": 200,
+        "generated": 200,
+        "success_rate": 100.0,
+        "time_seconds": 110.0,
+        "solver": "Explicit 2D finite differences + sponge BC",
+        "solver_resolution": "~200×200 spatial, ~270 time steps (capped; downsampled to 64³)",
+        "verification": "Interior PDE residual (np.gradient) + BC energy + IC"
+    },
 }
 
 EQUATION_METADATA = {
@@ -77,7 +95,24 @@ EQUATION_METADATA = {
         "domain_y": "(-1, 1)",
         "bc": "Dirichlet: u=0 on boundary",
         "solution": "u(x,y) = sin(a₁πx)sin(a₂πy)"
-    }
+    },
+    "helmholtz3D": {
+        "title": "Helmholtz 3D Equation",
+        "pde": "Δu + k²u = q(x,y,z)",
+        "domain_x": "(-1, 1)",
+        "domain_y": "(-1, 1)",
+        "domain_z": "(-1, 1)",
+        "bc": "Boundary values match manufactured solution",
+        "solution": "u(x,y,z) = sin(a₁πx)sin(a₂πy)sin(a₃πz)"
+    },
+    "wave2d1": {
+        "title": "2D Wave Equation",
+        "pde": "u_tt = c² (u_xx + u_yy)",
+        "domain_x": "(-3, 3)",
+        "domain_y": "(-3, 3)",
+        "bc": "Absorbing sponge layers at boundary",
+        "ic": "u(x,y,0): sum of 1–3 Gaussian sources; u_t(x,y,0)=0",
+    },
 }
 
 
@@ -110,16 +145,26 @@ def create_metadata(equation: str, dataset_dir: Path):
     lines.append(f"Number of samples: {n_samples}")
     lines.append(f"Generation seed: 42")
     lines.append(f"Solver resolution: {stats['solver_resolution']}")
-    lines.append(f"Storage resolution: {solution_shape[0]}x{solution_shape[1]}")
-    lines.append(f"Storage grid size: {solution_shape}")
+    res_str = "×".join(str(s) for s in solution_shape)
+    lines.append(f"Storage resolution: {res_str}")
+    lines.append(f"Storage grid size (per sample): {solution_shape}")
 
     # Domain info
     if equation in ["allen_cahn", "burgers", "convection"]:
         lines.append(f"Domain x: {eq_meta['domain_x']}")
         lines.append(f"Domain t: {eq_meta['domain_t']}")
-    else:  # helmholtz2D
+    elif equation == "helmholtz2D":
         lines.append(f"Domain x: {eq_meta['domain_x']}")
         lines.append(f"Domain y: {eq_meta['domain_y']}")
+    elif equation == "helmholtz3D":
+        lines.append(f"Domain x: {eq_meta['domain_x']}")
+        lines.append(f"Domain y: {eq_meta['domain_y']}")
+        lines.append(f"Domain z: {eq_meta['domain_z']}")
+    elif equation == "wave2d1":
+        lines.append(f"Domain x: {eq_meta['domain_x']}")
+        lines.append(f"Domain y: {eq_meta['domain_y']}")
+        if grid_info.get("t_span"):
+            lines.append(f"Time span (downsampled grid): {grid_info['t_span']}")
 
     lines.append("")
 
@@ -128,7 +173,7 @@ def create_metadata(equation: str, dataset_dir: Path):
     lines.append("-" * 40)
     lines.append(f"Equation: {eq_meta['pde']}")
     lines.append(f"Boundary conditions: {eq_meta['bc']}")
-    if 'ic' in eq_meta:
+    if "ic" in eq_meta:
         lines.append(f"Initial condition: {eq_meta['ic']}")
     if 'solution' in eq_meta:
         lines.append(f"Analytical solution: {eq_meta['solution']}")
@@ -170,10 +215,13 @@ def create_metadata(equation: str, dataset_dir: Path):
         lines.append("- Lower success rate (71.5%) is expected for Burgers equation due to")
         lines.append("  shock formation and nonlinear dynamics")
         lines.append("- Each sample undergoes 3 verification attempts with random seeds")
-    elif equation in ["convection", "helmholtz2D"]:
+    elif equation in ["convection", "helmholtz2D", "helmholtz3D"]:
         lines.append("- Analytical solution with analytical derivatives ensures machine")
         lines.append("  precision accuracy (PDE loss ~10^-28)")
         lines.append("- Fast generation due to direct evaluation (no time-stepping)")
+    elif equation == "wave2d1":
+        lines.append("- Finite-difference time domain with absorbing boundaries")
+        lines.append("- Verification uses gradient-based residuals on downsampled grids")
     else:  # allen_cahn
         lines.append("- scipy solver with adaptive time-stepping")
         lines.append("- 100% success rate indicates stable numerical integration")
@@ -191,7 +239,14 @@ def main():
     """Create metadata files for all regenerated datasets."""
 
     datasets_root = Path("datasets")
-    equations = ["allen_cahn", "burgers", "convection", "helmholtz2D"]
+    equations = [
+        "allen_cahn",
+        "burgers",
+        "convection",
+        "helmholtz2D",
+        "helmholtz3D",
+        "wave2d1",
+    ]
 
     print("Creating metadata files for regenerated datasets...\n")
 

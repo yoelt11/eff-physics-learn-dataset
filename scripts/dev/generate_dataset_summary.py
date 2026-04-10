@@ -61,7 +61,14 @@ def get_parametric_splits_info(
 
 def main():
     data_dir = Path("datasets")
-    equations = ["allen_cahn", "burgers", "convection", "helmholtz2D"]
+    equations = [
+        "allen_cahn",
+        "burgers",
+        "convection",
+        "helmholtz2D",
+        "helmholtz3D",
+        "wave2d1",
+    ]
     
     # Collect data for all equations
     parametric_data = []
